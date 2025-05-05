@@ -32,5 +32,14 @@ Criar arquivo .env com as seguintes configurações:
 Em formato de texto para o Gemini:
 
 ```bash
-curl -X POST http://localhost:5000/gemini/text -H "Content-Type: application/json" -d '{"text": "Faça uma solicitação aqui"}'
+curl -X POST http://localhost:5000/gemini/text \ 
+    -H "Content-Type: application/json" \
+    -d '{"text": "Faça uma solicitação aqui"}'
+```
+
+Em formato de áudio para o Gemini:
+```bash
+curl -X POST http://localhost:5000/gemini/audio \
+  -F "audio=@caminho/para/seu_audio.mp3" \
+  -F "text=Transcreva esse áudio e me diga o que foi falado."
 ```
