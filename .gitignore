@@ -1,3 +1,4 @@
 .env
 *.ogg
 __pycache__
+.cache

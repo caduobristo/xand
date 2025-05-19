@@ -43,3 +43,8 @@ curl -X POST http://localhost:5000/gemini/audio \
   -F "audio=@caminho/para/seu_audio.mp3" \
   -F "text=Transcreva esse áudio e me diga o que foi falado."
 ```
+
+Pedindo música para o Spotify:
+```bash
+curl -X GET http://localhost:5000/spotify/music -H "Content-Type: application/json" -d '{"music": "Escreva uma música"}'
+```
