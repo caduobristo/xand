@@ -5,6 +5,8 @@ import time
 from dotenv import load_dotenv
 
 load_dotenv()
+import subprocess
+import platform
 
 client_id = os.getenv("SPOTIFY_CLIENT_ID")
 client_secret = os.getenv("SPOTIFY_CLIENT_SECRET")
@@ -21,18 +23,20 @@ def search_music(query):
         artist = track['artists'][0]['name']
         track_id = track['id']
         duration_ms = track['duration_ms']
+        spotify_uri = f"spotify:track:{track_id}"
 
         print(f"Tocando: {name} - {artist}")
         print(f"Duração: {duration_ms / 1000:.2f} s")
 
-        os.system(f'start spotify:track:{track_id}')
+        try:
+            subprocess.Popen(['spotify', f'--uri={spotify_uri}'])
+        except FileNotFoundError:
+            print("Spotify não encontrado. Verifique se está instalado e se o comando 'spotify' funciona no terminal.")
 
-        # Espera a duração da música + o tempo de abrir o spotify
         time.sleep(2 + duration_ms / 1000)
 
-        os.system("taskkill /f /im Spotify.exe")
     else:
-        print("Nenhuma música encontrada")
+        print("Nenhuma música encontrada.")
 
-query = input("Digite o name da música que deseja tocar: ")
+query = input("Digite o nome da música que deseja tocar: ")
 search_music(query)
