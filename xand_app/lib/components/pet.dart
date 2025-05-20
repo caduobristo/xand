@@ -1,24 +1,37 @@
 import 'package:flame/components.dart';
 import 'package:flame/sprite.dart';
-import 'package:flame/flame.dart';
 
-class Pet extends SpriteAnimationComponent {
-  Pet() : super(size: Vector2.all(256)); // tamanho do pet
+import '../game/xand.dart';
+
+class Pet extends SpriteAnimationComponent with HasGameRef<Xand> {
+  final String imageName;
+  final int frameCount;
+  final double stepTime;
+
+  Pet({
+    required this.imageName,
+    required this.frameCount,
+    required this.stepTime,
+  });
 
   @override
   Future<void> onLoad() async {
-    final image = await Flame.images.load('respirando.png');
+    final image = await gameRef.images.load(imageName);
+    final frameWidth = image.width / frameCount;
+    final frameHeight = image.height.toDouble();
 
     final spriteSheet = SpriteSheet(
       image: image,
-      srcSize: Vector2(1024, 1024), // tamanho de cada frame
+      srcSize: Vector2(frameWidth, frameHeight),
     );
 
     animation = spriteSheet.createAnimation(
       row: 0,
-      stepTime: 1,
-      to: 2, // número de frames
-      loop: true,
+      stepTime: stepTime,
+      to: frameCount,
     );
+
+    size = Vector2(256, 256);
+    anchor = Anchor.center;
   }
 }

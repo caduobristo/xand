@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/services.dart';
+import 'package:xand/components/MenuOverlay.dart';
 
 import 'game/xand.dart';
 
@@ -16,6 +17,9 @@ void main() async {
   runApp(
     GameWidget(
       game: Xand(),
+      overlayBuilderMap: {
+        'MenuOverlay': (context, game) => MenuOverlay(game: game as Xand),
+      },
     ),
   );
 }
