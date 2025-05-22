@@ -20,6 +20,7 @@ class Xand extends FlameGame {
       'comendo.png',
       'bolinha.png',
       'dormindo.png',
+      'escutando.png',
     ]);
 
     _pet = Pet(imageName: 'respirando.png', frameCount: 2, stepTime: 0.5)
@@ -85,7 +86,7 @@ class Xand extends FlameGame {
         await startRecording();
 
         // Stop automático após 30 segundos
-        Future.delayed(const Duration(seconds: 10), () async {
+        Future.delayed(const Duration(seconds: 30), () async {
           if (_isRecording) {
             await stopRecording();
           }
@@ -106,6 +107,7 @@ class Xand extends FlameGame {
       if (hasPermission) {
         await _recorder.start(const RecordConfig(), path: path);
         _isRecording = true;
+        await _switchPetAnimation('escutando.png', 4, 0.5, duration: 0);
         print('🎙 Gravando em: $path');
       } else {
         print("Permissão de gravação negada.");
@@ -118,6 +120,7 @@ class Xand extends FlameGame {
   Future<void> stopRecording() async {
     try {
       String? path = await _recorder.stop();
+      await _switchPetAnimation('respirando.png', 2, 0.5, duration: 0);
       print("Gravação parada. Arquivo salvo em: $path");
       _isRecording = false;
     } catch (e) {
