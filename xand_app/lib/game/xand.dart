@@ -2,10 +2,16 @@ import 'dart:ui';
 
 import 'package:flame/game.dart';
 import 'package:xand/components/pet.dart';
+import 'package:record/record.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class Xand extends FlameGame {
   late Pet _pet;
   bool isNight = false;
+
+  final AudioRecorder _recorder = AudioRecorder();
+  bool _isRecording = false;
 
   @override
   Future<void> onLoad() async {
@@ -70,6 +76,53 @@ class Xand extends FlameGame {
     // Força redesenho do background
     overlays.remove('MenuOverlay');
     overlays.add('MenuOverlay');
+  }
+
+  void hear() async {
+    if (!_isRecording) {
+      // Solicita permissões
+      if (await Permission.microphone.request().isGranted) {
+        await startRecording();
+
+        // Stop automático após 30 segundos
+        Future.delayed(const Duration(seconds: 10), () async {
+          if (_isRecording) {
+            await stopRecording();
+          }
+        });
+      } else {
+        print('❌ Permissão de microfone negada');
+      }
+    } else {
+      await stopRecording();
+    }
+  }
+
+  Future<void> startRecording() async {
+    try {
+      bool hasPermission = await _recorder.hasPermission();
+      final dir = await getApplicationDocumentsDirectory();
+      final path = '${dir.path}/audio.mp3';
+      if (hasPermission) {
+        await _recorder.start(const RecordConfig(), path: path);
+        _isRecording = true;
+        print('🎙 Gravando em: $path');
+      } else {
+        print("Permissão de gravação negada.");
+      }
+    } catch (e) {
+      print("Erro ao iniciar gravação: $e");
+    }
+  }
+
+  Future<void> stopRecording() async {
+    try {
+      String? path = await _recorder.stop();
+      print("Gravação parada. Arquivo salvo em: $path");
+      _isRecording = false;
+    } catch (e) {
+      print("Erro ao parar gravação: $e");
+    }
   }
 
   // Utilitário para trocar animações do pet

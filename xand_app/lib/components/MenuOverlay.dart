@@ -27,6 +27,10 @@ class MenuOverlay extends StatelessWidget {
               onPressed: game.sleep,
               child: const Text('Dormir'),
             ),
+            ElevatedButton(
+              onPressed: game.hear,
+              child: const Text('Ouvir'),
+            ),
           ],
         ),
       ),
