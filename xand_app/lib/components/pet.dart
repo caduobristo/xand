@@ -31,7 +31,7 @@ class Pet extends SpriteAnimationComponent with HasGameRef<Xand> {
       to: frameCount,
     );
 
-    size = Vector2(256, 256);
+    size = Vector2(512, 512);
     anchor = Anchor.center;
   }
 }

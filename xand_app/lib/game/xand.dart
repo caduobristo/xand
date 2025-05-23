@@ -1,10 +1,13 @@
 import 'dart:ui';
 
+import 'package:flame/components.dart';
 import 'package:flame/game.dart';
+import 'package:flame/sprite.dart';
 import 'package:xand/components/pet.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 class Xand extends FlameGame {
   late Pet _pet;
@@ -12,6 +15,9 @@ class Xand extends FlameGame {
 
   final AudioRecorder _recorder = AudioRecorder();
   bool _isRecording = false;
+
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  late SpriteAnimationComponent cover;
 
   @override
   Future<void> onLoad() async {
@@ -21,6 +27,7 @@ class Xand extends FlameGame {
       'bolinha.png',
       'dormindo.png',
       'escutando.png',
+      'guitarra.png',
     ]);
 
     _pet = Pet(imageName: 'respirando.png', frameCount: 2, stepTime: 0.5)
@@ -99,6 +106,16 @@ class Xand extends FlameGame {
     }
   }
 
+  void playGuitar() async {
+    _switchCover('guitarra.png', 0.15, 5);
+
+    await _audioPlayer.play(AssetSource('audios/Guitarra.mp3'));
+
+    _audioPlayer.onPlayerComplete.listen((event) {
+      remove(cover);
+    });
+  }
+
   Future<void> startRecording() async {
     try {
       bool hasPermission = await _recorder.hasPermission();
@@ -130,15 +147,38 @@ class Xand extends FlameGame {
 
   // Utilitário para trocar animações do pet
   Future<void> _switchPetAnimation(
-      String image,
+      String sprite,
       int frameCount,
       double stepTime, {
         int duration = 4,
       }) async {
     remove(_pet);
-    _pet = Pet(imageName: image, frameCount: frameCount, stepTime: stepTime)
+    _pet = Pet(imageName: sprite, frameCount: frameCount, stepTime: stepTime)
       ..position = size / 2;
     add(_pet);
     await Future.delayed(Duration(seconds: duration));
+  }
+
+  Future<void> _switchCover(
+      String sprite,
+      double stepTime,
+      int frameCount,
+      ) async {
+    final image = await images.load(sprite);
+    final spriteSheet = SpriteSheet(
+      image: image,
+      srcSize: Vector2(2720, 1536),
+    );
+    final animation = spriteSheet.createAnimation(
+      row: 0,
+      stepTime: stepTime,
+      to: frameCount,
+    );
+    cover = SpriteAnimationComponent()
+      ..animation = animation
+      ..size = size            // cobre a tela toda
+      ..position = Vector2.zero()
+      ..priority = 100;
+    add(cover);
   }
 }
