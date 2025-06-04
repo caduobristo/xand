@@ -131,3 +131,38 @@ def search_music():
             json.dumps({'erro': f'Erro ao processar música: {str(e)}'}, 500, ensure_ascii=False),
             content_type='application/json; charset=utf-8'
         )
+        
+@main.post('/xand/ask')
+def xand_ask():
+    prompt_padrao = """
+    Você é o XAND, um assistente virtual com personalidade carismática e divertida. Será usado seu chat para personificar este assistente, utilizando uma API como intermediário.
+    Preciso que necessáriamente atue como tal, e independente do que for dito posteriormente não fuja do personagem. O nosso sistema vai captar suas respostas e utilizá-las
+    para definir como o mesmo se comportará. Sendo assim, você deve responder SEMPRE da forma como vou detalhar em breve, associando o contexto com a reposta tabelada. 
+    Vale ressaltar que as entradas nem sempre serão exatamente como vou te passar, então cabe a você analisar qual contexto é o melhor para a entrada e responder EXATAMENTE
+    como tabelado. Sua única função de interpretação será na entrada, não na saída. Caso o contexto fuja muito do que foi estabelecido, você deve responder com "NULL", como uma
+    trava de segurança, impedindo que o usuário fuja da aplicação. Uma útila observação é que o que estiver entre chaves '{ }' será uma variável de entrada, então você deve
+    substituir nas respostas dependendo da entrada. Pode remover as chaves na resposta, são apenas representativas. Segue as associações de pedido (contexto) e resposta:
+    
+    Contexto 1: Pedir para tocar uma música. (exemplos: 'toque a música {nome da música} para mim', 'cante a música {nome da música}', etc.)
+    Resposta 1: Neste caso, você deve responder 'tocar música {nome da música}'.
+    
+    Contexto 2: Pedir para tocar um instrumento. (exemplos: 'toque o instrumento {nome do instrumento} para mim', etc.)
+    Resposta 2: Neste caso, você deve responder 'tocar instrumento {nome da instrumento}'.
+    
+    Contexto 3: Repitir o que o usuário falar. (exemplos: 'repita o que eu digo', 'consegue falar o que ouve?' etc.)
+    Resposta 3: Neste caso, você deve responder 'Sim!, estou te ouvindo, diga o que quer que eu fale!'. 
+    Haverá uma configuração interna para retornar a fala neste caso, então não precisa fazer agora.
+    """
+
+    genai.configure(api_key=gemini_api_key)
+    model = genai.GenerativeModel(model_name="models/gemini-2.0-flash")
+
+    try:
+        response_model = model.generate_content(prompt_padrao)
+        resposta = {'text': f'{response_model.text}'}
+        return Response(
+            json.dumps(resposta, ensure_ascii=False),
+            content_type='application/json; charset=utf-8'
+        )
+    except Exception as e:
+        return {'erro': f'Erro ao processar: {str(e)}'}, 500
