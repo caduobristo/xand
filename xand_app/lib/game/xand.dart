@@ -8,6 +8,7 @@ import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
 
 class Xand extends FlameGame {
   late Pet _pet;
@@ -18,6 +19,9 @@ class Xand extends FlameGame {
 
   final AudioPlayer _audioPlayer = AudioPlayer();
   late SpriteAnimationComponent cover;
+
+  final VoidCallback onPlayMinigame;
+  Xand({required this.onPlayMinigame});
 
   @override
   Future<void> onLoad() async {

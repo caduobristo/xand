@@ -76,6 +76,11 @@ class MenuOverlay extends StatelessWidget {
                 onPressed: () => falarComXand(context),
                 child: const Text('Falar com XAND'),
               ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: game.onPlayMinigame,
+                child: const Text('Xand, o Voador'),
+              ),
             ],
           ),
         ),
