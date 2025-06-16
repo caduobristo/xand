@@ -9,7 +9,7 @@ class MenuOverlay extends StatelessWidget {
   const MenuOverlay({super.key, required this.game});
 
   Future<void> falarComXand(BuildContext context) async {
-    final url = Uri.parse('http://192.168.0.1:5000/xand/ask'); 
+    final url = Uri.parse('http://192.168.15.70:5000/xand/ask');
     try {
       final response = await http.post(
         url,

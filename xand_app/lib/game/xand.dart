@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:flame/components.dart';
@@ -9,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 class Xand extends FlameGame {
   late Pet _pet;
@@ -100,13 +102,53 @@ class Xand extends FlameGame {
         Future.delayed(const Duration(seconds: 30), () async {
           if (_isRecording) {
             await stopRecording();
+            await sendAudioFile("Descreva o áudio");
           }
         });
+
       } else {
         print('❌ Permissão de microfone negada');
       }
     } else {
       await stopRecording();
+      await sendAudioFile("Descreva o áudio");
+    }
+  }
+
+  Future<void> sendAudioFile(String promptText) async {
+    try {
+      final Directory dir = await getApplicationDocumentsDirectory();
+      final String audioFilePath = '${dir.path}/audio.mp3';
+
+      File audioFile = File(audioFilePath);
+      if (!await audioFile.exists()) {
+        print('Erro: O arquivo de áudio não foi encontrado em $audioFilePath');
+        return;
+      }
+
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('http://192.168.15.70:5000/gemini/audio'),
+      );
+      request.fields['text'] = promptText;
+      request.files.add(await http.MultipartFile.fromPath(
+        'audio',
+        audioFile.path,
+      ));
+
+      var response = await request.send();
+
+      if (response.statusCode == 200) {
+        print('Arquivo de áudio e prompt enviados com sucesso!');
+        String responseBody = await response.stream.bytesToString();
+        print('Resposta do servidor: $responseBody');
+      } else {
+        print('Erro ao enviar o arquivo de áudio. Status code: ${response.statusCode}');
+        String errorBody = await response.stream.bytesToString();
+        print('Corpo da resposta de erro: $errorBody');
+      }
+    } catch (e) {
+      print('Ocorreu um erro: $e');
     }
   }
 
