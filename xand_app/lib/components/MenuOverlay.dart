@@ -1,45 +1,15 @@
+// lib/components/MenuOverlay.dart
+
 import 'package:flutter/material.dart';
 import 'package:xand/game/xand.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'package:http/http.dart' as http; // Manter
+import 'dart:convert'; // Manter
+import 'package:http_parser/http_parser.dart'; // Manter
 
 class MenuOverlay extends StatelessWidget {
   final Xand game;
 
   const MenuOverlay({super.key, required this.game});
-
-  Future<void> falarComXand(BuildContext context) async {
-    final url = Uri.parse('http://192.168.15.70:5000/xand/ask');
-    try {
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final fala = data['text'];
-
-        showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('XAND'),
-            content: Text(fala),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-      } else {
-        print('Erro do servidor: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('Erro ao se comunicar com XAND: $e');
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,13 +19,13 @@ class MenuOverlay extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 10),
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          child: _buildButtonRow(),
+          child: _buildButtonRow(context), // Passa o BuildContext
         ),
       ),
     );
   }
 
-  Widget _buildButtonRow() {
+  Widget _buildButtonRow(BuildContext context) { // Aceita BuildContext
     if (game.isNight) {
       return ElevatedButton(
         onPressed: game.sleep,
@@ -65,8 +35,8 @@ class MenuOverlay extends StatelessWidget {
 
     if (game.isRecording) {
       return ElevatedButton(
-        onPressed: game.hear,
-        child: const Text('Parar'),
+        onPressed: () => game.hear(context), // Passa o context para hear()
+        child: const Text('Parar Gravação'),
       );
     }
 
@@ -88,20 +58,14 @@ class MenuOverlay extends StatelessWidget {
           child: const Text('Dormir'),
         ),
         const SizedBox(width: 8),
-        // O botão de "Ouvir" agora só aparece no estado padrão
         ElevatedButton(
-          onPressed: game.hear,
-          child: const Text('Ouvir'),
+          onPressed: () => game.hear(context), // Passa o context para hear()
+          child: const Text('Falar com XAND'),
         ),
         const SizedBox(width: 8),
         ElevatedButton(
           onPressed: game.playGuitar,
           child: const Text('Tocar guitarra'),
-        ),
-        const SizedBox(width: 8),
-        ElevatedButton(
-          onPressed: () => falarComXand(game.buildContext!),
-          child: const Text('Falar com XAND'),
         ),
         const SizedBox(width: 8),
         ElevatedButton(

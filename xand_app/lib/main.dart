@@ -6,8 +6,6 @@ import 'package:xand/game/xand.dart';
 import 'package:xand/minigame/flappy_xand.dart';
 import 'package:xand/minigame/overlays/game_overlay.dart';
 
-import 'game/xand.dart';
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -27,42 +25,69 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  late Widget _gameWidget;
+  late final Xand _xandGame;
+  late final FlappyXandGame _flappyXandGame;
+
+  // Use um ValueNotifier para gerenciar qual jogo está ativo
+  late final ValueNotifier<FlameGame> _currentGameNotifier;
 
   @override
   void initState() {
     super.initState();
-    _switchToPetGame();
+
+    _xandGame = Xand(onPlayMinigame: _switchToFlappyGame);
+    _flappyXandGame = FlappyXandGame(onBack: _switchToPetGame);
+
+    // Inicializa o notificador com o jogo principal (Xand)
+    _currentGameNotifier = ValueNotifier<FlameGame>(_xandGame);
+  }
+
+  @override
+  void dispose() {
+    _xandGame.pauseEngine();
+
+    _flappyXandGame.pauseEngine();
+
+    _currentGameNotifier.dispose(); 
+    super.dispose();
   }
 
   void _switchToPetGame() {
-    setState(() {
-      _gameWidget = GameWidget<Xand>(
-        game: Xand(onPlayMinigame: _switchToFlappyGame),
-        overlayBuilderMap: {
-          'MenuOverlay': (context, game) => MenuOverlay(game: game as Xand),
-        },
-      );
-    });
+    _currentGameNotifier.value = _xandGame;
   }
 
   void _switchToFlappyGame() {
-    setState(() {
-      _gameWidget = GameWidget<FlappyXandGame>(
-        game: FlappyXandGame(onBack: _switchToPetGame),
-        overlayBuilderMap: {
-          'GameOverOverlay': (context, game) =>
-              GameOverOverlay(game: game as FlappyXandGame),
-        },
-      );
-    });
+    _currentGameNotifier.value = _flappyXandGame;
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: _gameWidget,
+      home: Scaffold( 
+        body: ValueListenableBuilder<FlameGame>(
+          valueListenable: _currentGameNotifier,
+          builder: (context, game, child) {
+            if (game is Xand) {
+              return GameWidget<Xand>(
+                game: game, 
+                overlayBuilderMap: {
+                  'MenuOverlay': (ctx, g) => MenuOverlay(game: g as Xand),
+                },
+                initialActiveOverlays: const ['MenuOverlay'],
+              );
+            } else if (game is FlappyXandGame) {
+              return GameWidget<FlappyXandGame>(
+                game: game, 
+                overlayBuilderMap: {
+                  'GameOverOverlay': (ctx, g) => GameOverOverlay(game: g as FlappyXandGame),
+                },
+              );
+            }
+            return const Center(child: Text('Tipo de jogo desconhecido'));
+          },
+        ),
+      ),
     );
   }
 }

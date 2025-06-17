@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:ui';
+import 'dart:convert'; // Necessário para json.decode
 
 import 'package:flame/components.dart';
 import 'package:flame/game.dart';
@@ -10,6 +11,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter/material.dart'; // Necessário para BuildContext e AlertDialog
+import 'package:http_parser/http_parser.dart'; // Necessário para MediaType
 
 class Xand extends FlameGame {
   late Pet _pet;
@@ -27,6 +30,8 @@ class Xand extends FlameGame {
   late SpriteAnimationComponent cover;
 
   final VoidCallback onPlayMinigame;
+
+
   Xand({required this.onPlayMinigame});
 
   @override
@@ -57,7 +62,6 @@ class Xand extends FlameGame {
 
     add(_pet);
 
-    overlays.add('MenuOverlay');
   }
 
   @override
@@ -97,64 +101,45 @@ class Xand extends FlameGame {
   // Métodos de ação
   void play() async {
     stopPetting();
-    overlays.remove('MenuOverlay');
     await _switchPetAnimation('bolinha.png', 3, 0.2, duration: 4);
     await _switchPetAnimation('respirando.png', 2, 0.5);
-    overlays.add('MenuOverlay');
   }
 
   void eat() async {
     stopPetting();
-    overlays.remove('MenuOverlay');
     await _switchPetAnimation('comendo.png', 4, 0.2, duration: 4);
     await _switchPetAnimation('respirando.png', 2, 0.5);
-    overlays.add('MenuOverlay');
   }
 
   void sleep() async {
     stopPetting();
     isNight = !isNight;
 
-    if(isNight){
+    if (isNight) {
       await _switchPetAnimation('dormindo.png', 4, 0.5);
-    }
-    else{
+    } else {
       await _switchPetAnimation('respirando.png', 2, 0.5);
     }
-
-    // Força redesenho do background
-    overlays.remove('MenuOverlay');
-    overlays.add('MenuOverlay');
   }
 
-  void hear() async {
+  // Função `hear` ajustada para lidar com a gravação e o envio para o backend
+  void hear(BuildContext context) async {
     if (!isRecording) {
-      // Solicita permissões
       if (await Permission.microphone.request().isGranted) {
         await startRecording();
-
-        // Stop automático após 30 segundos
-        Future.delayed(const Duration(seconds: 30), () async {
-          if (isRecording) {
-            await stopRecording();
-            await sendAudioFile("Descreva o áudio");
-          }
-        });
-
       } else {
         print('Permissão de microfone negada');
       }
     } else {
-      await stopRecording();
-      await sendAudioFile("Descreva o áudio");
+      String? recordedPath = await stopRecording();
+      if (recordedPath != null) {
+        await sendAudioToXandBackend(recordedPath, context); // Passa o context
+      }
     }
   }
 
-  Future<void> sendAudioFile(String promptText) async {
+  Future<void> sendAudioToXandBackend(String audioFilePath, BuildContext context) async {
     try {
-      final Directory dir = await getApplicationDocumentsDirectory();
-      final String audioFilePath = '${dir.path}/audio.mp3';
-
       File audioFile = File(audioFilePath);
       if (!await audioFile.exists()) {
         print('Erro: O arquivo de áudio não foi encontrado em $audioFilePath');
@@ -163,27 +148,78 @@ class Xand extends FlameGame {
 
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://192.168.15.70:5000/gemini/audio'),
+        Uri.parse('http://10.0.2.2:5000/xand/ask'),        //Uri.parse('http://192.168.15.70:5000/xand/ask'), // Alterado para a rota /xand/ask no rasp
       );
-      request.fields['text'] = promptText;
       request.files.add(await http.MultipartFile.fromPath(
         'audio',
         audioFile.path,
+        filename: 'audio.ogg', 
+        contentType: MediaType('audio', 'opus'), 
       ));
 
       var response = await request.send();
 
       if (response.statusCode == 200) {
-        print('Arquivo de áudio e prompt enviados com sucesso!');
+        print('Arquivo de áudio enviado para XAND com sucesso!');
         String responseBody = await response.stream.bytesToString();
-        print('Resposta do servidor: $responseBody');
+        print('Resposta do servidor do XAND: $responseBody');
+
+        final data = json.decode(responseBody);
+        final fala = data['text'];
+
+        if (context.mounted) { 
+          showDialog(
+            context: context,
+            builder: (_) => AlertDialog(
+              title: const Text('XAND Responde'),
+              content: Text(fala),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+
       } else {
-        print('Erro ao enviar o arquivo de áudio. Status code: ${response.statusCode}');
+        print('Erro ao enviar o arquivo de áudio para XAND. Status code: ${response.statusCode}');
         String errorBody = await response.stream.bytesToString();
-        print('Corpo da resposta de erro: $errorBody');
+        print('Corpo da resposta de erro do XAND: $errorBody');
+        if (context.mounted) {
+          showDialog(
+            context: context,
+            builder: (_) => AlertDialog(
+              title: const Text('Erro do XAND'),
+              content: Text('Não consegui entender, tente novamente: $errorBody'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
       }
     } catch (e) {
-      print('Ocorreu um erro: $e');
+      print('Ocorreu um erro ao se comunicar com XAND: $e');
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Erro de Comunicação'),
+            content: Text('Não foi possível se comunicar com o XAND: $e'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
     }
   }
 
@@ -203,14 +239,13 @@ class Xand extends FlameGame {
     try {
       bool hasPermission = await _recorder.hasPermission();
       final dir = await getApplicationDocumentsDirectory();
-      final path = '${dir.path}/audio.mp3';
+      final path = '${dir.path}/audio.ogg';
       if (hasPermission) {
-        overlays.remove('MenuOverlay');
-
-        await _recorder.start(const RecordConfig(), path: path);
+        // REMOVEMOS: overlays.remove('MenuOverlay');
+        await _recorder.start(const RecordConfig(encoder: AudioEncoder.opus), path: path);
         isRecording = true;
         await _switchPetAnimation('escutando.png', 4, 0.5);
-        overlays.add('MenuOverlay');
+        // REMOVEMOS: overlays.add('MenuOverlay');
         print('Gravando em: $path');
       } else {
         print("Permissão de gravação negada.");
@@ -220,16 +255,16 @@ class Xand extends FlameGame {
     }
   }
 
-  Future<void> stopRecording() async {
-    try {
-      overlays.remove('MenuOverlay');
+  Future<String?> stopRecording() async {
+    try {;
       String? path = await _recorder.stop();
       await _switchPetAnimation('respirando.png', 2, 0.5);
-      overlays.add('MenuOverlay');
       print("Gravação parada. Arquivo salvo em: $path");
       isRecording = false;
+      return path;
     } catch (e) {
       print("Erro ao parar gravação: $e");
+      return null;
     }
   }
 
@@ -271,7 +306,7 @@ class Xand extends FlameGame {
     );
     cover = SpriteAnimationComponent()
       ..animation = animation
-      ..size = size            // cobre a tela toda
+      ..size = size          // cobre a tela toda
       ..position = Vector2.zero()
       ..priority = 100;
     add(cover);

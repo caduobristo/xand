@@ -2,21 +2,23 @@ from flask import Blueprint, request
 import json
 from flask import Response
 import subprocess
-
-from openai import OpenAI
-from dotenv import load_dotenv
+import time
 import os
+
+import speech_recognition as sr
+from pydub import AudioSegment 
+
+from openai import OpenAI 
+from dotenv import load_dotenv
+import io
 import google.generativeai as genai
 
-import spotipy
-from spotipy.oauth2 import SpotifyClientCredentials
-import time
 
-# Carrega do .env
 load_dotenv()
 gemini_api_key = os.getenv("KEY_GEMINI")
 spotify_client_id = os.getenv("SPOTIFY_CLIENT_ID")
 spotify_client_secret = os.getenv("SPOTIFY_CLIENT_SECRET")
+
 
 main = Blueprint('main', __name__)
 
@@ -26,26 +28,21 @@ def home():
 
 @main.post('/gemini/text')
 def gemini_text():
-    # Caso o texto venha como JSON
     data = request.get_json()
     text = data.get('text') if data else None
 
     if not text:
-        # Tenta pegar como form-data se não for JSON
         text = request.form.get('text')
-    # Caso não tenha o campo text na requisição
     if not text:
         return {'erro': 'Text não fornecido'}, 400
     
-
     genai.configure(api_key=gemini_api_key)
-    model = genai.GenerativeModel(model_name="models/gemini-2.0-flash")
+    model = genai.GenerativeModel(model_name="models/gemini-2.0-flash") # flash para texto
 
     try:
         response_model = model.generate_content(text)
     except Exception as e:
         return {'erro': f'Erro ao processar texto: {str(e)}'}, 500
-
 
     resposta = {'text': f'{response_model.text}'}
     return Response(
@@ -53,41 +50,6 @@ def gemini_text():
         content_type='application/json; charset=utf-8'
     )
 
-@main.post('/gemini/audio')
-def gemini_audio():
-    # Verifica se o arquivo de áudio foi enviado
-    audio_file = request.files.get('audio')
-    if not audio_file:
-        return {'erro': 'Arquivo de áudio não fornecido'}, 400
-
-    audio_bytes = audio_file.read()
-
-    # (Opcional) Campo de texto complementar
-    prompt = request.form.get('text', '')
-
-
-    genai.configure(api_key=gemini_api_key)
-    model = genai.GenerativeModel(model_name="models/gemini-1.5-pro")  # Modelos multimodais precisam suportar áudio
-
-    try:
-        response_model = model.generate_content([
-            prompt,
-            {
-                'mime_type': "audio/ogg",
-                'data': audio_bytes
-            }
-        ])
-    except Exception as e:
-        return Response(
-            json.dumps({'erro': f'Erro ao processar o áudio: {str(e)}'}, 500, ensure_ascii=False),
-            content_type='application/json; charset=utf-8'
-        )
-
-    resposta = {'text': response_model.text}
-    return Response(
-        json.dumps(resposta, ensure_ascii=False),
-        content_type='application/json; charset=utf-8'
-    )
 
 @main.get('/spotify/music')
 def search_music():
@@ -95,9 +57,7 @@ def search_music():
     music = data.get('music') if data else None
 
     if not music:
-        # Tenta pegar como form-data se não for JSON
         music = request.form.get('music')
-    # Caso não tenha o campo text na requisição
     if not music: 
         return {'erro': 'Music não fornecido'}, 400
     
@@ -120,10 +80,8 @@ def search_music():
 
             subprocess.Popen(['spotify', f'--uri={spotify_uri}'])
 
-            # Espera a duração da música + o tempo de abrir o spotify
             time.sleep(2 + duration_ms / 1000)
 
-            #os.system("taskkill /f /im Spotify.exe")
         else:
             print("Nenhuma música encontrada")
     except Exception as e:
@@ -131,38 +89,135 @@ def search_music():
             json.dumps({'erro': f'Erro ao processar música: {str(e)}'}, 500, ensure_ascii=False),
             content_type='application/json; charset=utf-8'
         )
-        
+
+
 @main.post('/xand/ask')
 def xand_ask():
-    prompt_padrao = """
-    Você é o XAND, um assistente virtual com personalidade carismática e divertida. Será usado seu chat para personificar este assistente, utilizando uma API como intermediário.
-    Preciso que necessáriamente atue como tal, e independente do que for dito posteriormente não fuja do personagem. O nosso sistema vai captar suas respostas e utilizá-las
-    para definir como o mesmo se comportará. Sendo assim, você deve responder SEMPRE da forma como vou detalhar em breve, associando o contexto com a reposta tabelada. 
-    Vale ressaltar que as entradas nem sempre serão exatamente como vou te passar, então cabe a você analisar qual contexto é o melhor para a entrada e responder EXATAMENTE
-    como tabelado. Sua única função de interpretação será na entrada, não na saída. Caso o contexto fuja muito do que foi estabelecido, você deve responder com "NULL", como uma
-    trava de segurança, impedindo que o usuário fuja da aplicação. Uma útila observação é que o que estiver entre chaves '{ }' será uma variável de entrada, então você deve
-    substituir nas respostas dependendo da entrada. Pode remover as chaves na resposta, são apenas representativas. Segue as associações de pedido (contexto) e resposta:
-    
-    Contexto 1: Pedir para tocar uma música. (exemplos: 'toque a música {nome da música} para mim', 'cante a música {nome da música}', etc.)
-    Resposta 1: Neste caso, você deve responder 'tocar música {nome da música}'.
-    
-    Contexto 2: Pedir para tocar um instrumento. (exemplos: 'toque o instrumento {nome do instrumento} para mim', etc.)
-    Resposta 2: Neste caso, você deve responder 'tocar instrumento {nome da instrumento}'.
-    
-    Contexto 3: Repitir o que o usuário falar. (exemplos: 'repita o que eu digo', 'consegue falar o que ouve?' etc.)
-    Resposta 3: Neste caso, você deve responder 'Sim!, estou te ouvindo, diga o que quer que eu fale!'. 
-    Haverá uma configuração interna para retornar a fala neste caso, então não precisa fazer agora.
+    base_prompt = """
+    Você é o XAND, um assistente virtual com personalidade carismática e divertida.
+    Sua tarefa é interpretar a **intenção** do usuário a partir do **texto** e responder **EXATAMENTE** no formato tabelado abaixo.
+    Não adicione texto extra, explicações ou cumprimentos. Apenas a resposta tabelada correspondente à intenção identificada.
+    Se a intenção do usuário não se encaixar claramente em NENHUM dos contextos listados, responda com "NULL".
+    O que estiver entre chaves duplas '{{ }}' é uma variável que você deve substituir.
+
+    ---
+    Contextos e Respostas Tabeladas:
+
+    1. **Pedir Música:** Quando o usuário pede para tocar/cantar uma música específica.
+       - Exemplos de entrada: "toque a música {nome da música} para mim", "cante {nome da música}", "quero ouvir {nome da música}".
+       - Resposta: 'tocar música {{nome da música}}'
+
+    2. **Pedir Instrumento:** Quando o usuário pede para tocar um instrumento (sem especificar uma música).
+       - Exemplos de entrada: "toque o instrumento {nome do instrumento}", "consegue tocar um {nome do instrumento}?".
+       - Resposta: 'tocar instrumento {{nome do instrumento}}'
+
+    3. **Repetir Fala:** Quando o usuário pede para você repetir o que ele diz.
+       - Exemplos de entrada: "repita o que eu digo", "consegue falar o que ouve?", "fale isso: {frase}".
+       - Resposta: 'Sim!, estou te ouvindo, diga o que quer que eu fale!'
+
+    4. **Perguntar Horário:** Quando o usuário pergunta sobre a hora atual do sistema.
+       - Exemplos de entrada: "que horas são?", "me diga a hora", "qual o horário agora?".
+       - Resposta: 'horario: {{hora_atual}}'
+
+    5. **Perguntar Temperatura de Curitiba:** Quando o usuário pergunta sobre a temperatura especificamente de Curitiba.
+       - Exemplos de entrada: "qual a temperatura de Curitiba?", "está quente em Curitiba?", "me diga a temperatura atual em Curitiba".
+       - Resposta: 'temperatura: {{temperatura_curitiba_celsius}}'
+
+    ---
+    Agora, interprete o texto do usuário e forneça a resposta tabelada.
+    Se a intenção for "Perguntar Horário", substitua `{{hora_atual}}` pela string literal `{{hora_atual}}`.
+    If the intention is "Perguntar Temperatura de Curitiba", replace `{{temperatura_curitiba_celsius}}` with the literal string `{{temperatura_curitiba_celsius}}`.
     """
 
-    genai.configure(api_key=gemini_api_key)
-    model = genai.GenerativeModel(model_name="models/gemini-2.0-flash")
+    audio_file = request.files.get('audio')
+    if not audio_file:
+        return {'erro': 'Arquivo de áudio não fornecido'}, 400
+
+    audio_bytes = audio_file.read()
+
+    transcribed_text = ""
+    recognizer = sr.Recognizer()
 
     try:
-        response_model = model.generate_content(prompt_padrao)
-        resposta = {'text': f'{response_model.text}'}
+        audio_in_memory = io.BytesIO(audio_bytes)
+        audio = AudioSegment.from_file(audio_in_memory, format="ogg")
+
+        # Exporta para WAV também em memória
+        wav_in_memory = io.BytesIO()
+        audio.export(
+            wav_in_memory,
+            format="wav",
+            parameters=["-ar", "16000", "-ac", "1", "-sample_fmt", "s16"] 
+        )
+        wav_in_memory.seek(0)
+        
+        with sr.AudioFile(wav_in_memory) as source:
+            audio_data = recognizer.record(source)
+            transcribed_text = recognizer.recognize_google(audio_data, language="pt-BR")
+            print(f"DEBUG: Texto transcrito pelo Google Speech Recognition: {transcribed_text}")
+            
+    except sr.UnknownValueError:
+        transcribed_text = ""
+        print("DEBUG: Google Speech Recognition não conseguiu entender o áudio")
+    except sr.RequestError as e:
+        print(f"DEBUG: Não foi possível solicitar resultados do Google Speech Recognition; {e}")
+        return Response(
+            json.dumps({'erro': f'Erro no serviço de transcrição (Google STT): {str(e)}'}, ensure_ascii=False),
+            content_type='application/json; charset=utf-8',
+            status=500
+        )
+    except Exception as e:
+        print(f"DEBUG: Erro geral na transcrição: {e}")
+        return Response(
+            json.dumps({'erro': f'Erro inesperado na transcrição do áudio: {str(e)}'}, ensure_ascii=False),
+            content_type='application/json; charset=utf-8',
+            status=500
+        )
+    finally:
+        # Não precisamos remover arquivos, pois nada foi salvo no disco
+        pass
+
+
+    if not transcribed_text.strip():
+        resposta = {'text': "NULL"}
+        return Response(
+            json.dumps(resposta, ensure_ascii=False),
+            content_type='application/json; charset=utf-8'
+        )
+
+    # 2. Enviar o texto transcrito para o Gemini Flash para interpretação
+    genai.configure(api_key=gemini_api_key)
+    model = genai.GenerativeModel(model_name="models/gemini-2.0-flash") # Usando Flash para o texto
+
+    try:
+        # Concatena o prompt base com o texto transcrito
+        combined_prompt_for_gemini = f"{base_prompt}\n\nEntrada do usuário: \"{transcribed_text}\""
+
+        response_model = model.generate_content(combined_prompt_for_gemini)
+        
+        gemini_response_text = response_model.text.strip()
+        
+        print(f"DEBUG: Texto bruto do Gemini (após SpeechRecognition): {gemini_response_text}") # Debug da resposta Gemini
+        
+        # Lógica para preencher variáveis como hora e temperatura
+        if "horario:" in gemini_response_text:
+            current_time = time.strftime("%H:%M")
+            gemini_response_text = gemini_response_text.replace("{{hora_atual}}", current_time)
+        
+        if "temperatura:" in gemini_response_text:
+            # Aqui você precisaria de uma forma de obter a temperatura real de Curitiba
+            temperatura_curitiba = "25" # Substitua por uma chamada à API de clima real
+            gemini_response_text = gemini_response_text.replace("{{temperatura_curitiba_celsius}}", temperatura_curitiba)
+
+        resposta = {'text': gemini_response_text}
         return Response(
             json.dumps(resposta, ensure_ascii=False),
             content_type='application/json; charset=utf-8'
         )
     except Exception as e:
-        return {'erro': f'Erro ao processar: {str(e)}'}, 500
+        print(f"Erro ao processar texto transcrito no Gemini: {e}")
+        return Response(
+            json.dumps({'erro': f'Erro ao interpretar a fala (Gemini Flash): {str(e)}'}, ensure_ascii=False),
+            content_type='application/json; charset=utf-8',
+            status=500
+        )

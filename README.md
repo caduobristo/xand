@@ -48,3 +48,9 @@ Pedindo música para o Spotify:
 ```bash
 curl -X GET http://localhost:5000/spotify/music -H "Content-Type: application/json" -d '{"music": "Escreva uma música"}'
 ```
+
+PowerShell(ADM) - ffmpeg serve para manter o aúdio na memória:
+
+Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+
+choco install ffmpeg
