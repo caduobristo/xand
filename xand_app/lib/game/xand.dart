@@ -9,15 +9,19 @@ import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class Xand extends FlameGame {
   late Pet _pet;
   bool isNight = false;
+  bool _isPetting = false;
+  bool _playingGuitar = false;
+
+  String _currentAnimation = 'respirando.png';
+  late TimerComponent _meowTimer;
 
   final AudioRecorder _recorder = AudioRecorder();
-  bool _isRecording = false;
+  bool isRecording = false;
 
   final AudioPlayer _audioPlayer = AudioPlayer();
   late SpriteAnimationComponent cover;
@@ -34,7 +38,19 @@ class Xand extends FlameGame {
       'dormindo.png',
       'escutando.png',
       'guitarra.png',
+      'carinho.png'
     ]);
+
+    _meowTimer = TimerComponent(
+      period: 10.0,
+      repeat: true,
+      onTick: () {
+        if (!isNight && !_playingGuitar) {
+          AudioPlayer().play(AssetSource('audios/meow.mp3'));
+        }
+      },
+    );
+    add(_meowTimer);
 
     _pet = Pet(imageName: 'respirando.png', frameCount: 2, stepTime: 0.5)
       ..position = size / 2;
@@ -56,35 +72,54 @@ class Xand extends FlameGame {
     }
   }
 
+  void startPetting() async {
+    if (_currentAnimation != 'respirando.png' || _isPetting) return;
+
+    _isPetting = true;
+
+    _audioPlayer.setReleaseMode(ReleaseMode.loop);
+    _audioPlayer.play(AssetSource('audios/purr.mp3'));
+
+    _switchPetAnimation('carinho.png', 3, 0.5);
+  }
+
+  void stopPetting() {
+    if (!_isPetting) return;
+
+    _isPetting = false;
+
+    _audioPlayer.stop();
+    _audioPlayer.setReleaseMode(ReleaseMode.release);
+
+    _switchPetAnimation('respirando.png', 2, 0.5);
+  }
+
   // Métodos de ação
   void play() async {
-    if(isNight){
-      isNight = !isNight;
-      overlays.remove('MenuOverlay');
-      overlays.add('MenuOverlay');
-    }
+    stopPetting();
+    overlays.remove('MenuOverlay');
     await _switchPetAnimation('bolinha.png', 3, 0.2, duration: 4);
-    await _switchPetAnimation('respirando.png', 2, 0.5, duration: 0);
+    await _switchPetAnimation('respirando.png', 2, 0.5);
+    overlays.add('MenuOverlay');
   }
 
   void eat() async {
-    if(isNight){
-      isNight = !isNight;
-      overlays.remove('MenuOverlay');
-      overlays.add('MenuOverlay');
-    }
+    stopPetting();
+    overlays.remove('MenuOverlay');
     await _switchPetAnimation('comendo.png', 4, 0.2, duration: 4);
-    await _switchPetAnimation('respirando.png', 2, 0.5, duration: 0);
+    await _switchPetAnimation('respirando.png', 2, 0.5);
+    overlays.add('MenuOverlay');
   }
 
   void sleep() async {
+    stopPetting();
     isNight = !isNight;
 
     if(isNight){
-      await _switchPetAnimation('dormindo.png', 4, 0.5, duration: 0);
+      await _switchPetAnimation('dormindo.png', 4, 0.5);
     }
     else{
-      await _switchPetAnimation('respirando.png', 2, 0.5, duration: 0);
+      await _switchPetAnimation('respirando.png', 2, 0.5);
     }
 
     // Força redesenho do background
@@ -93,21 +128,21 @@ class Xand extends FlameGame {
   }
 
   void hear() async {
-    if (!_isRecording) {
+    if (!isRecording) {
       // Solicita permissões
       if (await Permission.microphone.request().isGranted) {
         await startRecording();
 
         // Stop automático após 30 segundos
         Future.delayed(const Duration(seconds: 30), () async {
-          if (_isRecording) {
+          if (isRecording) {
             await stopRecording();
             await sendAudioFile("Descreva o áudio");
           }
         });
 
       } else {
-        print('❌ Permissão de microfone negada');
+        print('Permissão de microfone negada');
       }
     } else {
       await stopRecording();
@@ -153,12 +188,14 @@ class Xand extends FlameGame {
   }
 
   void playGuitar() async {
+    _playingGuitar = true;
     _switchCover('guitarra.png', 0.15, 5);
 
-    await _audioPlayer.play(AssetSource('audios/Guitarra.mp3'));
+    await _audioPlayer.play(AssetSource('audios/guitar.mp3'));
 
     _audioPlayer.onPlayerComplete.listen((event) {
       remove(cover);
+      _playingGuitar = false;
     });
   }
 
@@ -168,10 +205,13 @@ class Xand extends FlameGame {
       final dir = await getApplicationDocumentsDirectory();
       final path = '${dir.path}/audio.mp3';
       if (hasPermission) {
+        overlays.remove('MenuOverlay');
+
         await _recorder.start(const RecordConfig(), path: path);
-        _isRecording = true;
-        await _switchPetAnimation('escutando.png', 4, 0.5, duration: 0);
-        print('🎙 Gravando em: $path');
+        isRecording = true;
+        await _switchPetAnimation('escutando.png', 4, 0.5);
+        overlays.add('MenuOverlay');
+        print('Gravando em: $path');
       } else {
         print("Permissão de gravação negada.");
       }
@@ -182,10 +222,12 @@ class Xand extends FlameGame {
 
   Future<void> stopRecording() async {
     try {
+      overlays.remove('MenuOverlay');
       String? path = await _recorder.stop();
-      await _switchPetAnimation('respirando.png', 2, 0.5, duration: 0);
+      await _switchPetAnimation('respirando.png', 2, 0.5);
+      overlays.add('MenuOverlay');
       print("Gravação parada. Arquivo salvo em: $path");
-      _isRecording = false;
+      isRecording = false;
     } catch (e) {
       print("Erro ao parar gravação: $e");
     }
@@ -196,8 +238,15 @@ class Xand extends FlameGame {
       String sprite,
       int frameCount,
       double stepTime, {
-        int duration = 4,
+        int duration = 0,
       }) async {
+    _currentAnimation = sprite;
+    if (_currentAnimation == 'respirando.png' && !isNight) {
+      _meowTimer.timer.resume();
+    } else {
+      _meowTimer.timer.pause();
+    }
+
     remove(_pet);
     _pet = Pet(imageName: sprite, frameCount: frameCount, stepTime: stepTime)
       ..position = size / 2;

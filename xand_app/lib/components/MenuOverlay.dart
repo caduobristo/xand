@@ -49,42 +49,66 @@ class MenuOverlay extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 10),
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              ElevatedButton(
-                onPressed: game.play,
-                child: const Text('Brincar'),
-              ),
-              ElevatedButton(
-                onPressed: game.eat,
-                child: const Text('Comer'),
-              ),
-              ElevatedButton(
-                onPressed: game.sleep,
-                child: const Text('Dormir'),
-              ),
-              ElevatedButton(
-                onPressed: game.hear,
-                child: const Text('Ouvir'),
-              ),
-              ElevatedButton(
-                onPressed: game.playGuitar,
-                child: const Text('Tocar guitarra'),
-              ),
-              ElevatedButton(
-                onPressed: () => falarComXand(context),
-                child: const Text('Falar com XAND'),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: game.onPlayMinigame,
-                child: const Text('Xand, o Voador'),
-              ),
-            ],
-          ),
+          child: _buildButtonRow(),
         ),
       ),
+    );
+  }
+
+  Widget _buildButtonRow() {
+    if (game.isNight) {
+      return ElevatedButton(
+        onPressed: game.sleep,
+        child: const Text('Acordar'),
+      );
+    }
+
+    if (game.isRecording) {
+      return ElevatedButton(
+        onPressed: game.hear,
+        child: const Text('Parar'),
+      );
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        ElevatedButton(
+          onPressed: game.play,
+          child: const Text('Brincar'),
+        ),
+        const SizedBox(width: 8),
+        ElevatedButton(
+          onPressed: game.eat,
+          child: const Text('Comer'),
+        ),
+        const SizedBox(width: 8),
+        ElevatedButton(
+          onPressed: game.sleep,
+          child: const Text('Dormir'),
+        ),
+        const SizedBox(width: 8),
+        // O botão de "Ouvir" agora só aparece no estado padrão
+        ElevatedButton(
+          onPressed: game.hear,
+          child: const Text('Ouvir'),
+        ),
+        const SizedBox(width: 8),
+        ElevatedButton(
+          onPressed: game.playGuitar,
+          child: const Text('Tocar guitarra'),
+        ),
+        const SizedBox(width: 8),
+        ElevatedButton(
+          onPressed: () => falarComXand(game.buildContext!),
+          child: const Text('Falar com XAND'),
+        ),
+        const SizedBox(width: 8),
+        ElevatedButton(
+          onPressed: game.onPlayMinigame,
+          child: const Text('Xand, o Voador'),
+        ),
+      ],
     );
   }
 }

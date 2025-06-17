@@ -1,9 +1,11 @@
 import 'package:flame/components.dart';
+import 'package:flame/events.dart';
 import 'package:flame/sprite.dart';
 
 import '../game/xand.dart';
 
-class Pet extends SpriteAnimationComponent with HasGameRef<Xand> {
+class Pet extends SpriteAnimationComponent
+    with HasGameRef<Xand>, DragCallbacks{
   final String imageName;
   final int frameCount;
   final double stepTime;
@@ -33,5 +35,23 @@ class Pet extends SpriteAnimationComponent with HasGameRef<Xand> {
 
     size = Vector2(512, 512);
     anchor = Anchor.center;
+  }
+
+  @override
+  void onDragStart(DragStartEvent event) {
+    super.onDragStart(event);
+    game.startPetting();
+  }
+
+  @override
+  void onDragEnd(DragEndEvent event) {
+    super.onDragEnd(event);
+    game.stopPetting();
+  }
+
+  @override
+  void onDragCancel(DragCancelEvent event) {
+    super.onDragCancel(event);
+    game.stopPetting();
   }
 }
