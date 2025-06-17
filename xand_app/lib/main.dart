@@ -28,7 +28,6 @@ class _MyAppState extends State<MyApp> {
   late final Xand _xandGame;
   late final FlappyXandGame _flappyXandGame;
 
-  // Use um ValueNotifier para gerenciar qual jogo está ativo
   late final ValueNotifier<FlameGame> _currentGameNotifier;
 
   @override
@@ -37,8 +36,6 @@ class _MyAppState extends State<MyApp> {
 
     _xandGame = Xand(onPlayMinigame: _switchToFlappyGame);
     _flappyXandGame = FlappyXandGame(onBack: _switchToPetGame);
-
-    // Inicializa o notificador com o jogo principal (Xand)
     _currentGameNotifier = ValueNotifier<FlameGame>(_xandGame);
   }
 

@@ -174,7 +174,6 @@ def xand_ask():
             status=500
         )
     finally:
-        # Não precisamos remover arquivos, pois nada foi salvo no disco
         pass
 
 
@@ -190,7 +189,6 @@ def xand_ask():
     model = genai.GenerativeModel(model_name="models/gemini-2.0-flash") # Usando Flash para o texto
 
     try:
-        # Concatena o prompt base com o texto transcrito
         combined_prompt_for_gemini = f"{base_prompt}\n\nEntrada do usuário: \"{transcribed_text}\""
 
         response_model = model.generate_content(combined_prompt_for_gemini)
@@ -199,14 +197,12 @@ def xand_ask():
         
         print(f"DEBUG: Texto bruto do Gemini (após SpeechRecognition): {gemini_response_text}") # Debug da resposta Gemini
         
-        # Lógica para preencher variáveis como hora e temperatura
         if "horario:" in gemini_response_text:
             current_time = time.strftime("%H:%M")
             gemini_response_text = gemini_response_text.replace("{{hora_atual}}", current_time)
         
         if "temperatura:" in gemini_response_text:
-            # Aqui você precisaria de uma forma de obter a temperatura real de Curitiba
-            temperatura_curitiba = "25" # Substitua por uma chamada à API de clima real
+            temperatura_curitiba = "25" # Substituir por API
             gemini_response_text = gemini_response_text.replace("{{temperatura_curitiba_celsius}}", temperatura_curitiba)
 
         resposta = {'text': gemini_response_text}
