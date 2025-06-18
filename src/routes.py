@@ -1,4 +1,4 @@
-from flask import Blueprint, request
+from flask import Blueprint, request, Response
 import json
 from flask import Response
 import subprocess
@@ -12,6 +12,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 import io
 import google.generativeai as genai
+import requests
 
 
 load_dotenv()
