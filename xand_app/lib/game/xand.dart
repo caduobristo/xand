@@ -31,7 +31,6 @@ class Xand extends FlameGame {
 
   final VoidCallback onPlayMinigame;
 
-
   Xand({required this.onPlayMinigame});
 
   @override
@@ -61,7 +60,7 @@ class Xand extends FlameGame {
       ..position = size / 2;
 
     add(_pet);
-
+    overlays.add('MenuOverlay');
   }
 
   @override
@@ -101,25 +100,34 @@ class Xand extends FlameGame {
   // Métodos de ação
   void play() async {
     stopPetting();
+    overlays.remove('MenuOverlay');
     await _switchPetAnimation('bolinha.png', 3, 0.2, duration: 4);
     await _switchPetAnimation('respirando.png', 2, 0.5);
+    overlays.add('MenuOverlay');
   }
 
   void eat() async {
     stopPetting();
+    overlays.remove('MenuOverlay');
     await _switchPetAnimation('comendo.png', 4, 0.2, duration: 4);
     await _switchPetAnimation('respirando.png', 2, 0.5);
+    overlays.add('MenuOverlay');
   }
 
   void sleep() async {
     stopPetting();
     isNight = !isNight;
 
-    if (isNight) {
+    if(isNight){
       await _switchPetAnimation('dormindo.png', 4, 0.5);
-    } else {
+    }
+    else{
       await _switchPetAnimation('respirando.png', 2, 0.5);
     }
+
+    // Força redesenho do background
+    overlays.remove('MenuOverlay');
+    overlays.add('MenuOverlay');
   }
 
   // Função `hear` ajustada para lidar com a gravação e o envio para o backend
@@ -148,7 +156,7 @@ class Xand extends FlameGame {
 
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://10.0.2.2:5000/xand/ask'),        //Uri.parse('http://192.168.15.70:5000/xand/ask'), // Alterado para a rota /xand/ask no rasp
+        Uri.parse('http://192.168.15.6:5000/xand/ask'),        //Uri.parse('http://192.168.15.70:5000/xand/ask'), // Alterado para a rota /xand/ask no rasp
       );
       request.files.add(await http.MultipartFile.fromPath(
         'audio',
@@ -167,21 +175,34 @@ class Xand extends FlameGame {
         final data = json.decode(responseBody);
         final fala = data['text'];
 
-        if (context.mounted) { 
-          showDialog(
-            context: context,
-            builder: (_) => AlertDialog(
-              title: const Text('XAND Responde'),
-              content: Text(fala),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('OK'),
-                ),
-              ],
-            ),
-          );
-        }
+        final String comando = fala.toString().trim().toLowerCase();
+        if (comando == 'dormir') {
+          sleep();
+        } else if (comando == 'acordar'){
+          sleep();
+        } else if (comando == 'brincar') {
+          play();
+        } else if (comando == 'tocar guitarra') {
+          playGuitar();
+        } else if (comando == 'comer') {
+          eat();
+        } else if (comando == 'jogar'){
+          onPlayMinigame();
+        } else {
+          if (context.mounted) showDialog(
+              context: context,
+              builder: (_) => AlertDialog(
+                title: const Text('XAND Responde'),
+                content: Text(fala),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('OK'),
+                  ),
+                ],
+              ),
+            );
+          }
 
       } else {
         print('Erro ao enviar o arquivo de áudio para XAND. Status code: ${response.statusCode}');
@@ -224,15 +245,19 @@ class Xand extends FlameGame {
   }
 
   void playGuitar() async {
-    _playingGuitar = true;
-    _switchCover('guitarra.png', 0.15, 5);
+    if (!_playingGuitar) {
+      _playingGuitar = true;
+      overlays.remove('MenuOverlay');
+      _switchCover('guitarra.png', 0.15, 5);
 
-    await _audioPlayer.play(AssetSource('audios/guitar.mp3'));
+      await _audioPlayer.play(AssetSource('audios/guitar.mp3'));
 
-    _audioPlayer.onPlayerComplete.listen((event) {
-      remove(cover);
-      _playingGuitar = false;
-    });
+      _audioPlayer.onPlayerComplete.listen((event) {
+        remove(cover);
+        _playingGuitar = false;
+        overlays.add('MenuOverlay');
+      });
+    }
   }
 
   Future<void> startRecording() async {
@@ -244,6 +269,8 @@ class Xand extends FlameGame {
         // REMOVEMOS: overlays.remove('MenuOverlay');
         await _recorder.start(const RecordConfig(encoder: AudioEncoder.opus), path: path);
         isRecording = true;
+        overlays.remove('MenuOverlay');
+        overlays.add('MenuOverlay');
         await _switchPetAnimation('escutando.png', 4, 0.5);
         // REMOVEMOS: overlays.add('MenuOverlay');
         print('Gravando em: $path');
@@ -261,6 +288,8 @@ class Xand extends FlameGame {
       await _switchPetAnimation('respirando.png', 2, 0.5);
       print("Gravação parada. Arquivo salvo em: $path");
       isRecording = false;
+      overlays.remove('MenuOverlay');
+      overlays.add('MenuOverlay');
       return path;
     } catch (e) {
       print("Erro ao parar gravação: $e");

@@ -1,10 +1,5 @@
-// lib/components/MenuOverlay.dart
-
 import 'package:flutter/material.dart';
 import 'package:xand/game/xand.dart';
-import 'package:http/http.dart' as http; // Manter
-import 'dart:convert'; // Manter
-import 'package:http_parser/http_parser.dart'; // Manter
 
 class MenuOverlay extends StatelessWidget {
   final Xand game;
