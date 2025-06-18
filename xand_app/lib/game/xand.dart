@@ -175,7 +175,7 @@ class Xand extends FlameGame {
         final data = json.decode(responseBody);
         final fala = data['text'];
 
-        final String comando = fala.toString().trim().toLowerCase();
+        final String comando = fala.toString().replaceAll("'", "").replaceAll("`", "").replaceAll("´", "").trim().toLowerCase();
         if (comando == 'dormir') {
           sleep();
         } else if (comando == 'acordar'){
