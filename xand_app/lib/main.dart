@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/services.dart';
 import 'package:xand/components/MenuOverlay.dart';
+import 'package:xand/components/AmbientOverlay.dart';
 import 'package:xand/game/xand.dart';
 import 'package:xand/minigame/flappy_xand.dart';
 import 'package:xand/minigame/overlays/game_overlay.dart';
@@ -70,6 +71,7 @@ class _MyAppState extends State<MyApp> {
                 game: game, 
                 overlayBuilderMap: {
                   'MenuOverlay': (ctx, g) => MenuOverlay(game: g as Xand),
+                  'AmbientOverlay': (ctx, g) => AmbientOverlay(game: g as Xand),
                 },
                 initialActiveOverlays: const ['MenuOverlay'],
               );

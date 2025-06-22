@@ -19,6 +19,7 @@ class Xand extends FlameGame {
   bool isNight = false;
   bool _isPetting = false;
   bool _playingGuitar = false;
+  bool _ambient = false;
 
   String _currentAnimation = 'respirando.png';
   late TimerComponent _meowTimer;
@@ -27,7 +28,8 @@ class Xand extends FlameGame {
   bool isRecording = false;
 
   final AudioPlayer _audioPlayer = AudioPlayer();
-  late SpriteAnimationComponent cover;
+  SpriteAnimationComponent? cover;
+  AudioPlayer? _ambientPlayer;
 
   final VoidCallback onPlayMinigame;
 
@@ -49,7 +51,7 @@ class Xand extends FlameGame {
       period: 10.0,
       repeat: true,
       onTick: () {
-        if (!isNight && !_playingGuitar) {
+        if (!isNight && !_playingGuitar && !_ambient) {
           AudioPlayer().play(AssetSource('audios/meow.mp3'));
         }
       },
@@ -76,7 +78,8 @@ class Xand extends FlameGame {
   }
 
   void startPetting() async {
-    if (_currentAnimation != 'respirando.png' || _isPetting) return;
+    if (_currentAnimation != 'respirando.png' ||
+        _isPetting || _ambient || _playingGuitar) return;
 
     _isPetting = true;
 
@@ -248,12 +251,19 @@ class Xand extends FlameGame {
     if (!_playingGuitar) {
       _playingGuitar = true;
       overlays.remove('MenuOverlay');
-      _switchCover('guitarra.png', 0.15, 5);
+      _switchCover(
+          sprite: 'guitarra.png',
+          stepTime: 0.15,
+          frameCount: 5,
+          frameSize: Vector2(2720, 1536)
+      );
 
       await _audioPlayer.play(AssetSource('audios/guitar.mp3'));
 
       _audioPlayer.onPlayerComplete.listen((event) {
-        remove(cover);
+        if (cover != null && children.contains(cover!)) {
+          remove(cover!);
+        }
         _playingGuitar = false;
         overlays.add('MenuOverlay');
       });
@@ -318,26 +328,64 @@ class Xand extends FlameGame {
     await Future.delayed(Duration(seconds: duration));
   }
 
-  Future<void> _switchCover(
-      String sprite,
-      double stepTime,
-      int frameCount,
-      ) async {
+  Future<void> _switchCover({
+    required String sprite,
+    required double stepTime,
+    required int frameCount,
+    required Vector2 frameSize,
+  }) async {
+    if (cover != null && children.contains(cover!)) {
+      remove(cover!);
+    }
+
     final image = await images.load(sprite);
     final spriteSheet = SpriteSheet(
       image: image,
-      srcSize: Vector2(2720, 1536),
+      srcSize: frameSize,
     );
+
     final animation = spriteSheet.createAnimation(
       row: 0,
       stepTime: stepTime,
       to: frameCount,
     );
+
     cover = SpriteAnimationComponent()
       ..animation = animation
-      ..size = size          // cobre a tela toda
+      ..size = size
       ..position = Vector2.zero()
       ..priority = 100;
-    add(cover);
+    add(cover!);
+  }
+
+  void removeCover() {
+    _ambientPlayer?.stop();
+    _ambientPlayer?.dispose();
+    _ambientPlayer = null;
+
+    if (cover != null && children.contains(cover!)) {
+      remove(cover!);
+    }
+    overlays.remove('AmbientOverlay');
+    overlays.add('MenuOverlay');
+    _ambient = false;
+  }
+
+  void showCampfire() {
+    overlays.remove('MenuOverlay');
+    _ambient = true;
+
+    _switchCover(
+      sprite: 'fogueira.png',
+      stepTime: 0.1,
+      frameCount: 100,
+      frameSize: Vector2(1500, 849),
+    );
+
+    _ambientPlayer = AudioPlayer();
+    _ambientPlayer!.setReleaseMode(ReleaseMode.loop);
+    _ambientPlayer!.play(AssetSource('audios/fogueira.mp3'));
+
+    overlays.add('AmbientOverlay');
   }
 }
