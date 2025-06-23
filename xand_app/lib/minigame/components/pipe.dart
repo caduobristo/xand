@@ -6,19 +6,19 @@ import 'package:xand/minigame/flappy_xand.dart';
 
 class PipeGroup extends PositionComponent with HasGameRef<FlappyXandGame> {
   final double _pipeSpeed = 200;
-  final double _pipeGap = 10; // Espaço entre os canos
+  final double pipeGap; // Espaço entre os canos
 
-  PipeGroup();
+  PipeGroup({required this.pipeGap});
 
   @override
   Future<void> onLoad() async {
     final random = Random();
     final pipeHeight = gameRef.size.y;
     final gapPosition =
-        random.nextDouble() * (pipeHeight - _pipeGap - 100) + 50;
+        random.nextDouble() * (pipeHeight - pipeGap - 100) + 50;
 
     // Cano de baixo
-    final bottomPipe = await _buildPipe(gapPosition + _pipeGap, false);
+    final bottomPipe = await _buildPipe(gapPosition + pipeGap, false);
     add(bottomPipe);
 
     // Cano de cima
@@ -52,7 +52,7 @@ class PipeGroup extends PositionComponent with HasGameRef<FlappyXandGame> {
     position.x -= _pipeSpeed * dt;
 
     // Remove o grupo de canos quando ele sai da tela
-    if (position.x < -size.x) {
+    if (position.x < -width) {
       removeFromParent();
     }
   }
