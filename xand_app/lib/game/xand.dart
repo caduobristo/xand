@@ -12,6 +12,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart'; // Necessário para BuildContext e AlertDialog
 import 'package:http_parser/http_parser.dart'; // Necessário para MediaType
+import 'package:vibration/vibration.dart';
 import 'package:xand/components/status_bar.dart';
 
 class Xand extends FlameGame {
@@ -106,6 +107,9 @@ class Xand extends FlameGame {
     if (_currentAnimation != _defaultSprite ||
         _isPetting || _ambient || _playingGuitar) return;
 
+    if (await Vibration.hasVibrator() ?? false) {
+      Vibration.vibrate(pattern: [0, 200], repeat: 0);
+    }
     _isPetting = true;
 
     _audioPlayer.setReleaseMode(ReleaseMode.loop);
@@ -117,9 +121,12 @@ class Xand extends FlameGame {
     _checkPetNeeds();
   }
 
-  void stopPetting() {
+  void stopPetting() async {
     if (!_isPetting) return;
 
+    if (await Vibration.hasVibrator() ?? false) {
+      Vibration.cancel();
+    }
     _isPetting = false;
 
     _audioPlayer.stop();
@@ -165,10 +172,11 @@ class Xand extends FlameGame {
 
     if(isNight){
       await _switchPetAnimation('dormindo.png', 4, 0.5);
-    }
-    else{
+    } else{
       await _switchPetAnimation(_defaultSprite, 4, 0.5);
     }
+
+    _checkPetNeeds();
 
     // Força redesenho do background
     overlays.remove('MenuOverlay');
