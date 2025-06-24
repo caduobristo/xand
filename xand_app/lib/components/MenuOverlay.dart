@@ -64,6 +64,11 @@ class MenuOverlay extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         ElevatedButton(
+          onPressed: game.showCampfire,
+          child: const Text('Fogueira'),
+        ),
+        const SizedBox(width: 8),
+        ElevatedButton(
           onPressed: game.onPlayMinigame,
           child: const Text('Xand, o Voador'),
         ),

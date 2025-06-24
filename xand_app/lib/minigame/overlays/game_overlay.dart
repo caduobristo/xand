@@ -23,6 +23,21 @@ class GameOverOverlay extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
+            Text(
+              'Sua pontuação: ${game.score}',
+              style: const TextStyle(fontSize: 24, color: Colors.white),
+            ),
+            Text(
+              'Seu recorde: ${game.highScore}',
+              style: const TextStyle(fontSize: 24, color: Colors.white),
+            ),
+            // Mensagem de novo recorde
+            if (game.score == game.highScore && game.score > 0)
+              const Text(
+                'NOVO RECORDE!',
+                style: TextStyle(fontSize: 28, color: Colors.amber, fontWeight: FontWeight.bold),
+              ),
+            const SizedBox(height: 30),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [

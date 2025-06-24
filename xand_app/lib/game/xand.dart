@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:ui';
 import 'dart:convert'; // Necessário para json.decode
 
 import 'package:flame/components.dart';
@@ -13,13 +12,25 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart'; // Necessário para BuildContext e AlertDialog
 import 'package:http_parser/http_parser.dart'; // Necessário para MediaType
+import 'package:vibration/vibration.dart';
+import 'package:xand/components/status_bar.dart';
 
 class Xand extends FlameGame {
   late Pet _pet;
   bool isNight = false;
   bool _isPetting = false;
   bool _playingGuitar = false;
+  bool _ambient = false;
 
+  double _hunger = 1.0;
+  double _energy = 1.0;
+  double _fun = 1.0;
+
+  late StatusBar _hungerBar;
+  late StatusBar _energyBar;
+  late StatusBar _funBar;
+
+  String _defaultSprite = 'respirando.png';
   String _currentAnimation = 'respirando.png';
   late TimerComponent _meowTimer;
 
@@ -27,7 +38,8 @@ class Xand extends FlameGame {
   bool isRecording = false;
 
   final AudioPlayer _audioPlayer = AudioPlayer();
-  late SpriteAnimationComponent cover;
+  SpriteAnimationComponent? cover;
+  AudioPlayer? _ambientPlayer;
 
   final VoidCallback onPlayMinigame;
 
@@ -36,27 +48,43 @@ class Xand extends FlameGame {
   @override
   Future<void> onLoad() async {
     await images.loadAll([
-      'respirando.png',
+      _defaultSprite,
       'comendo.png',
       'bolinha.png',
       'dormindo.png',
       'escutando.png',
       'guitarra.png',
-      'carinho.png'
+      'carinho.png',
+      'meio_triste.png',
+      'triste.png'
     ]);
+
+    final barSize = Vector2(150, 20);
+    _hungerBar = StatusBar(label: 'Fome', initialValue: _hunger, position: Vector2(30, 30), size: barSize);
+    _energyBar = StatusBar(label: 'Energia', initialValue: _energy, position: Vector2(200, 30), size: barSize);
+    _funBar = StatusBar(label: 'Diversão', initialValue: _fun, position: Vector2(370, 30), size: barSize);
+    add(_hungerBar);
+    add(_energyBar);
+    add(_funBar);
+
+    add(TimerComponent(
+      period: 5.0,
+      repeat: true,
+      onTick: _updateStatus,
+    ));
 
     _meowTimer = TimerComponent(
       period: 10.0,
       repeat: true,
       onTick: () {
-        if (!isNight && !_playingGuitar) {
+        if (!isNight && !_playingGuitar && !_ambient) {
           AudioPlayer().play(AssetSource('audios/meow.mp3'));
         }
       },
     );
     add(_meowTimer);
 
-    _pet = Pet(imageName: 'respirando.png', frameCount: 2, stepTime: 0.5)
+    _pet = Pet(imageName: _defaultSprite, frameCount: 4, stepTime: 0.5)
       ..position = size / 2;
 
     add(_pet);
@@ -76,25 +104,35 @@ class Xand extends FlameGame {
   }
 
   void startPetting() async {
-    if (_currentAnimation != 'respirando.png' || _isPetting) return;
+    if (_currentAnimation != _defaultSprite ||
+        _isPetting || _ambient || _playingGuitar) return;
 
+    if (await Vibration.hasVibrator() ?? false) {
+      Vibration.vibrate(pattern: [0, 200], repeat: 0);
+    }
     _isPetting = true;
 
     _audioPlayer.setReleaseMode(ReleaseMode.loop);
     _audioPlayer.play(AssetSource('audios/purr.mp3'));
 
     _switchPetAnimation('carinho.png', 3, 0.5);
+    _fun = (_fun + 0.05).clamp(0.0, 1.0);
+    _funBar.updateValue(_fun);
+    _checkPetNeeds();
   }
 
-  void stopPetting() {
+  void stopPetting() async {
     if (!_isPetting) return;
 
+    if (await Vibration.hasVibrator() ?? false) {
+      Vibration.cancel();
+    }
     _isPetting = false;
 
     _audioPlayer.stop();
     _audioPlayer.setReleaseMode(ReleaseMode.release);
 
-    _switchPetAnimation('respirando.png', 2, 0.5);
+    _switchPetAnimation(_defaultSprite, 4, 0.5);
   }
 
   // Métodos de ação
@@ -102,7 +140,16 @@ class Xand extends FlameGame {
     stopPetting();
     overlays.remove('MenuOverlay');
     await _switchPetAnimation('bolinha.png', 3, 0.2, duration: 4);
-    await _switchPetAnimation('respirando.png', 2, 0.5);
+
+    _fun = (_fun + 0.4).clamp(0.0, 1.0);
+    _funBar.updateValue(_fun);
+
+    _energy = (_energy - 0.2).clamp(0.0, 1.0);
+    _energyBar.updateValue(_energy);
+
+    _checkPetNeeds();
+
+    await _switchPetAnimation(_defaultSprite, 4, 0.5);
     overlays.add('MenuOverlay');
   }
 
@@ -110,7 +157,12 @@ class Xand extends FlameGame {
     stopPetting();
     overlays.remove('MenuOverlay');
     await _switchPetAnimation('comendo.png', 4, 0.2, duration: 4);
-    await _switchPetAnimation('respirando.png', 2, 0.5);
+
+    _hunger = (_hunger + 0.3).clamp(0.0, 1.0);
+    _hungerBar.updateValue(_hunger);
+    _checkPetNeeds();
+
+    await _switchPetAnimation(_defaultSprite, 4, 0.5);
     overlays.add('MenuOverlay');
   }
 
@@ -120,10 +172,11 @@ class Xand extends FlameGame {
 
     if(isNight){
       await _switchPetAnimation('dormindo.png', 4, 0.5);
+    } else{
+      await _switchPetAnimation(_defaultSprite, 4, 0.5);
     }
-    else{
-      await _switchPetAnimation('respirando.png', 2, 0.5);
-    }
+
+    _checkPetNeeds();
 
     // Força redesenho do background
     overlays.remove('MenuOverlay');
@@ -248,12 +301,24 @@ class Xand extends FlameGame {
     if (!_playingGuitar) {
       _playingGuitar = true;
       overlays.remove('MenuOverlay');
-      _switchCover('guitarra.png', 0.15, 5);
+      _switchCover(
+          sprite: 'guitarra.png',
+          stepTime: 0.15,
+          frameCount: 5,
+          frameSize: Vector2(2720, 1536)
+      );
 
       await _audioPlayer.play(AssetSource('audios/guitar.mp3'));
 
       _audioPlayer.onPlayerComplete.listen((event) {
-        remove(cover);
+        if (cover != null && children.contains(cover!)) {
+          remove(cover!);
+          _fun = (_fun + 0.6).clamp(0.0, 1.0);
+          _funBar.updateValue(_fun);
+          _energy = (_energy - 0.2).clamp(0.0, 1.0);
+          _energyBar.updateValue(_energy);
+          _checkPetNeeds();
+        }
         _playingGuitar = false;
         overlays.add('MenuOverlay');
       });
@@ -266,13 +331,11 @@ class Xand extends FlameGame {
       final dir = await getApplicationDocumentsDirectory();
       final path = '${dir.path}/audio.ogg';
       if (hasPermission) {
-        // REMOVEMOS: overlays.remove('MenuOverlay');
         await _recorder.start(const RecordConfig(encoder: AudioEncoder.opus), path: path);
         isRecording = true;
         overlays.remove('MenuOverlay');
         overlays.add('MenuOverlay');
         await _switchPetAnimation('escutando.png', 4, 0.5);
-        // REMOVEMOS: overlays.add('MenuOverlay');
         print('Gravando em: $path');
       } else {
         print("Permissão de gravação negada.");
@@ -285,7 +348,7 @@ class Xand extends FlameGame {
   Future<String?> stopRecording() async {
     try {;
       String? path = await _recorder.stop();
-      await _switchPetAnimation('respirando.png', 2, 0.5);
+      await _switchPetAnimation(_defaultSprite, 4, 0.5);
       print("Gravação parada. Arquivo salvo em: $path");
       isRecording = false;
       overlays.remove('MenuOverlay');
@@ -305,7 +368,7 @@ class Xand extends FlameGame {
         int duration = 0,
       }) async {
     _currentAnimation = sprite;
-    if (_currentAnimation == 'respirando.png' && !isNight) {
+    if (_currentAnimation == _defaultSprite && !isNight) {
       _meowTimer.timer.resume();
     } else {
       _meowTimer.timer.pause();
@@ -318,26 +381,96 @@ class Xand extends FlameGame {
     await Future.delayed(Duration(seconds: duration));
   }
 
-  Future<void> _switchCover(
-      String sprite,
-      double stepTime,
-      int frameCount,
-      ) async {
+  Future<void> _switchCover({
+    required String sprite,
+    required double stepTime,
+    required int frameCount,
+    required Vector2 frameSize,
+  }) async {
+    if (cover != null && children.contains(cover!)) {
+      remove(cover!);
+    }
+
     final image = await images.load(sprite);
     final spriteSheet = SpriteSheet(
       image: image,
-      srcSize: Vector2(2720, 1536),
+      srcSize: frameSize,
     );
+
     final animation = spriteSheet.createAnimation(
       row: 0,
       stepTime: stepTime,
       to: frameCount,
     );
+
     cover = SpriteAnimationComponent()
       ..animation = animation
-      ..size = size          // cobre a tela toda
+      ..size = size
       ..position = Vector2.zero()
       ..priority = 100;
-    add(cover);
+    add(cover!);
+  }
+
+  void removeCover() {
+    _ambientPlayer?.stop();
+    _ambientPlayer?.dispose();
+    _ambientPlayer = null;
+
+    if (cover != null && children.contains(cover!)) {
+      remove(cover!);
+    }
+    overlays.remove('AmbientOverlay');
+    overlays.add('MenuOverlay');
+    _ambient = false;
+  }
+
+  void showCampfire() {
+    overlays.remove('MenuOverlay');
+    _ambient = true;
+
+    _switchCover(
+      sprite: 'fogueira.png',
+      stepTime: 0.1,
+      frameCount: 100,
+      frameSize: Vector2(1500, 849),
+    );
+
+    _ambientPlayer = AudioPlayer();
+    _ambientPlayer!.setReleaseMode(ReleaseMode.loop);
+    _ambientPlayer!.play(AssetSource('audios/fogueira.mp3'));
+
+    overlays.add('AmbientOverlay');
+  }
+
+  void _updateStatus() {
+    if (isNight) {
+      _energy = (_energy + 0.1).clamp(0.0, 1.0);
+    } else if (!_isPetting) {
+      _energy = (_energy - 0.005).clamp(0.0, 1.0);
+    }
+    _hunger = (_hunger - 0.005).clamp(0.0, 1.0);
+    _fun = (_fun - 0.005).clamp(0.0, 1.0);
+
+    _hungerBar.updateValue(_hunger);
+    _energyBar.updateValue(_energy);
+    _funBar.updateValue(_fun);
+
+    _checkPetNeeds();
+  }
+
+  void _checkPetNeeds() {
+    if (_currentAnimation != _defaultSprite) return;
+
+    if (_hunger > 0.6 && _energy > 0.6 && _fun > 0.6) {
+      _defaultSprite = 'respirando.png';
+    } else if (_hunger > 0.3 && _energy > 0.3 && _fun > 0.3){
+      _defaultSprite = 'meio_triste.png';
+    } else {
+      _defaultSprite = 'triste.png';
+    }
+    final isIdle = ['respirando.png', 'meio_triste.png', 'triste.png'].contains(_currentAnimation);
+    if (isIdle && _currentAnimation != _defaultSprite) {
+      _switchPetAnimation(_defaultSprite, 4, 0.5);
+    }
   }
 }
