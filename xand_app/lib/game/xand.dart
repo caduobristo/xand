@@ -14,6 +14,8 @@ import 'package:flutter/material.dart'; // Necessário para BuildContext e Alert
 import 'package:http_parser/http_parser.dart'; // Necessário para MediaType
 import 'package:vibration/vibration.dart';
 import 'package:xand/components/status_bar.dart';
+import 'package:flutter_tts/flutter_tts.dart'; // TTS para fala 
+import 'dart:async';
 
 class Xand extends FlameGame {
   late Pet _pet;
@@ -43,6 +45,10 @@ class Xand extends FlameGame {
 
   final VoidCallback onPlayMinigame;
 
+  late FlutterTts flutterTts;
+
+  Completer<void>? _speechCompleter;
+
   Xand({required this.onPlayMinigame});
 
   @override
@@ -58,6 +64,17 @@ class Xand extends FlameGame {
       'meio_triste.png',
       'triste.png'
     ]);
+
+    flutterTts = FlutterTts();
+    await flutterTts.setLanguage("pt-BR"); 
+    await flutterTts.setSpeechRate(1.0);   
+    await flutterTts.setVolume(1.0);       
+    await flutterTts.setPitch(2.0);
+
+    flutterTts.setCompletionHandler(() { 
+      _speechCompleter?.complete();
+      _speechCompleter = null;
+    });
 
     final barSize = Vector2(150, 20);
     _hungerBar = StatusBar(label: 'Fome', initialValue: _hunger, position: Vector2(30, 30), size: barSize);
@@ -230,32 +247,84 @@ class Xand extends FlameGame {
 
         final String comando = fala.toString().replaceAll("'", "").replaceAll("`", "").replaceAll("´", "").trim().toLowerCase();
         if (comando == 'dormir') {
+          await _speakAndWait('Hmm, que soninho, vou nanar!');
           sleep();
         } else if (comando == 'acordar'){
+          await _speakAndWait('Bora pra mais uma!');
           sleep();
         } else if (comando == 'brincar') {
+          await _speakAndWait('Oba! Vamos brincar!');
           play();
         } else if (comando == 'tocar guitarra') {
+          await _speakAndWait('Pega esse solo de guitarra!');
           playGuitar();
         } else if (comando == 'comer') {
+          await _speakAndWait('Hmm, que delícia! Vou comer!');
           eat();
         } else if (comando == 'jogar'){
+          await _speakAndWait('Preparar, apontar, Xand, o Voador!');
           onPlayMinigame();
-        } else {
-          if (context.mounted) showDialog(
-              context: context,
-              builder: (_) => AlertDialog(
-                title: const Text('XAND Responde'),
-                content: Text(fala),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('OK'),
-                  ),
-                ],
-              ),
-            );
-          }
+        } else if (fala.startsWith('horario:') || 
+                   fala.startsWith('temperatura:') || 
+                   fala.startsWith('Sim!, estou te ouvindo, diga o que quer que eu fale!') ||
+                   fala.startsWith('TEXTO:')) {
+            String textToSpeak = fala;
+            if (textToSpeak.startsWith('TEXTO:')) {
+                textToSpeak = textToSpeak.substring(6).trim(); 
+            }
+            _speak(textToSpeak);;
+            if (context.mounted) {
+              showDialog(
+                context: context,
+                builder: (_) => AlertDialog(
+                  title: const Text('XAND Responde'),
+                  content: Text(fala), 
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('OK'),
+                    ),
+                  ],
+                ),
+              );
+            }
+        } 
+        else if (fala == 'NULL') {
+            await _speak('Desculpe, não entendi o que você disse.');
+            if (context.mounted) {
+              showDialog(
+                context: context,
+                builder: (_) => AlertDialog(
+                  title: const Text('XAND Responde'),
+                  content: const Text('Desculpe, não entendi o que você disse.'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('OK'),
+                    ),
+                  ],
+                ),
+              );
+            }
+        }
+        else {
+            _speak(fala);
+            if (context.mounted) {
+              showDialog(
+                context: context,
+                builder: (_) => AlertDialog(
+                  title: const Text('XAND Responde'),
+                  content: Text(fala),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('OK'),
+                    ),
+                  ],
+                ),
+              );
+            }
+        }
 
       } else {
         print('Erro ao enviar o arquivo de áudio para XAND. Status code: ${response.statusCode}');
@@ -323,6 +392,23 @@ class Xand extends FlameGame {
         overlays.add('MenuOverlay');
       });
     }
+  }
+
+  Future<void> _speak(String text) async {
+    if (text.isEmpty) return;
+    await flutterTts.speak(text);
+  }
+
+  Future<void> _speakAndWait(String text) async {
+    if (text.isEmpty) return;
+
+    if (_speechCompleter != null && !_speechCompleter!.isCompleted) {
+      _speechCompleter!.complete();
+    }
+    _speechCompleter = Completer<void>();
+
+    await flutterTts.speak(text);
+    return _speechCompleter!.future;
   }
 
   Future<void> startRecording() async {
