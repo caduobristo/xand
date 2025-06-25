@@ -6,6 +6,7 @@ import 'package:xand/components/AmbientOverlay.dart';
 import 'package:xand/game/xand.dart';
 import 'package:xand/minigame/flappy_xand.dart';
 import 'package:xand/minigame/overlays/game_overlay.dart';
+import 'package:xand/components/stopwatch_overlay.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -74,6 +75,7 @@ class _MyAppState extends State<MyApp> {
                 overlayBuilderMap: {
                   'MenuOverlay': (ctx, g) => MenuOverlay(game: g as Xand),
                   'AmbientOverlay': (ctx, g) => AmbientOverlay(game: g as Xand),
+                  'StopwatchOverlay': (ctx, g) => StopwatchOverlay(game: g as Xand),
                 },
                 initialActiveOverlays: const ['MenuOverlay'],
               );
