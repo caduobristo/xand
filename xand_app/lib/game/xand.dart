@@ -15,7 +15,8 @@ import 'package:flutter/material.dart'; // Necessário para BuildContext e Alert
 import 'package:http_parser/http_parser.dart'; // Necessário para MediaType
 import 'package:vibration/vibration.dart';
 import 'package:xand/components/status_bar.dart';
-import 'package:flutter_tts/flutter_tts.dart'; // TTS para fala 
+import 'package:flutter_tts/flutter_tts.dart'; // TTS para fala
+import 'package:xand/components/reminder_note.dart';
 import 'dart:async';
 
 class Xand extends FlameGame {
@@ -26,6 +27,7 @@ class Xand extends FlameGame {
   bool _playingGuitar = false;
   bool _ambient = false;
   bool _alarm = false;
+  bool _speaking = false;
 
   // Barras de status
   double _hunger = 1.0;
@@ -57,6 +59,9 @@ class Xand extends FlameGame {
   late TextComponent _alarmText;
   TimerComponent? _alarmTimer;
 
+  String? _savedReminder;
+  ReminderNoteComponent? _reminderNoteComponent;
+
   final VoidCallback onPlayMinigame;
 
   late FlutterTts flutterTts;
@@ -78,18 +83,35 @@ class Xand extends FlameGame {
       'meio_triste.png',
       'triste.png'
     ]);
+    _setupTts();
+    _setupStatusBars();
+    _setupTimers();
+    _setupUI();
 
+    await _loadSavedReminder();
+
+    _pet = Pet(imageName: _defaultSprite, frameCount: 4, stepTime: 0.5)
+      ..position = size / 2;
+
+    add(_pet);
+    overlays.add('MenuOverlay');
+  }
+
+  Future<void> _setupTts() async {
     flutterTts = FlutterTts();
-    await flutterTts.setLanguage("pt-BR"); 
-    await flutterTts.setSpeechRate(0.8); 
-    await flutterTts.setVolume(1.0); 
+    await flutterTts.setLanguage("pt-BR");
+    await flutterTts.setSpeechRate(0.8);
+    await flutterTts.setVolume(1.0);
     await flutterTts.setPitch(2.0);
 
-    flutterTts.setCompletionHandler(() { 
+    flutterTts.setCompletionHandler(() {
       _speechCompleter?.complete();
       _speechCompleter = null;
+      _speaking = false;
     });
+  }
 
+  void _setupStatusBars() {
     final barSize = Vector2(150, 20);
     _hungerBar = StatusBar(label: 'Fome', initialValue: _hunger, position: Vector2(30, 30), size: barSize);
     _energyBar = StatusBar(label: 'Energia', initialValue: _energy, position: Vector2(200, 30), size: barSize);
@@ -97,20 +119,25 @@ class Xand extends FlameGame {
     add(_hungerBar);
     add(_energyBar);
     add(_funBar);
+  }
 
+  void _setupTimers() {
+    // Timer para depleção de status
     add(TimerComponent(
       period: 5.0,
       repeat: true,
       onTick: _updateStatus,
     ));
 
+    // Timer para miado aleatório
     _meowTimer = TimerComponent(
       period: 10.0,
       repeat: true,
       onTick: () {
         if (!isNight && !_playingGuitar && !_ambient &&
-            !_alarm && !isStopwatchRunning && _currentAnimation == _defaultSprite) {
-          AudioPlayer().play(AssetSource('audios/meow.mp3')); // Restaurado som do miado
+            !_alarm && !isStopwatchRunning && !_speaking &&
+            _currentAnimation == _defaultSprite) {
+          AudioPlayer().play(AssetSource('audios/meow.mp3'));
         }
       },
     );
@@ -124,33 +151,28 @@ class Xand extends FlameGame {
           stopwatchSecondsNotifier.value--;
         } else {
           _stopwatchTimer.timer.pause();
-          AudioPlayer().play(AssetSource('audios/timer.mp3'));
-          print("TIMER FINALIZADO!");
+          isStopwatchRunning = false;
+          AudioPlayer().play(AssetSource('audios/timer_end_sound.mp3'));
           if (overlays.isActive('StopwatchOverlay')) {
             hideStopwatch();
-            isStopwatchRunning = false;
           }
         }
       },
     );
     _stopwatchTimer.timer.pause();
     add(_stopwatchTimer);
+  }
 
+  void _setupUI() {
     _alarmText = TextComponent(
       text: 'Alarme: Nenhum',
       position: Vector2(size.x - 10, 10),
       anchor: Anchor.topRight,
       textRenderer: TextPaint(
-        style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+        style: const TextStyle(color: Colors.black, fontSize: 24, fontWeight: FontWeight.bold),
       ),
     );
     add(_alarmText);
-
-    _pet = Pet(imageName: _defaultSprite, frameCount: 4, stepTime: 0.5)
-      ..position = size / 2;
-
-    add(_pet);
-    overlays.add('MenuOverlay');
   }
 
   @override
@@ -277,7 +299,7 @@ class Xand extends FlameGame {
 
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://192.168.15.2:5000/xand/ask'), 
+        Uri.parse('http://192.168.15.6:5000/xand/ask'),
       );
       request.files.add(await http.MultipartFile.fromPath(
         'audio',
@@ -319,7 +341,11 @@ class Xand extends FlameGame {
         } else if (comando == 'jogar'){
           await _speakAndWait('Preparar, apontar, Xand, o Voador!');
           onPlayMinigame();
-        } 
+        } else if (comando.startsWith('lembrete:')){
+          saveReminder('lembrete aqui');
+        } else if (comando == 'ler lembrete'){
+          readReminderAloud();
+        }
         // --- Lógica para TIMER e ALARME por voz ---
         else if (comando.startsWith('timer:')) { 
             final parts = comando.split(':'); 
@@ -539,6 +565,7 @@ class Xand extends FlameGame {
 
   Future<void> _speakAndWait(String text) async {
     if (text.isEmpty) return;
+    _speaking = true;
 
     if (_speechCompleter != null && !_speechCompleter!.isCompleted) {
       _speechCompleter!.complete();
@@ -774,6 +801,69 @@ class Xand extends FlameGame {
       } else {
         await prefs.remove('saved_alarm');
       }
+    }
+  }
+
+  Future<void> _loadSavedReminder() async {
+    final prefs = await SharedPreferences.getInstance();
+    final reminderText = prefs.getString('saved_reminder');
+    if (reminderText != null && reminderText.isNotEmpty) {
+      _savedReminder = reminderText;
+      _showReminderNote();
+    }
+  }
+
+  Future<void> saveReminder(String text) async {
+    _savedReminder = text;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('saved_reminder', _savedReminder!);
+    _showReminderNote();
+  }
+
+  Future<void> deleteReminder() async {
+    _savedReminder = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('saved_reminder');
+    _reminderNoteComponent?.removeFromParent();
+    _reminderNoteComponent = null;
+  }
+
+  void _showReminderNote() {
+    _reminderNoteComponent?.removeFromParent();
+    _reminderNoteComponent = ReminderNoteComponent()..position = Vector2(size.x - 10, 40);
+    add(_reminderNoteComponent!);
+  }
+
+  void showReminderDialog() {
+    if (_savedReminder == null || buildContext == null) return;
+
+    showDialog(
+      context: buildContext!,
+      builder: (_) => AlertDialog(
+        title: const Text('Seu Lembrete'),
+        content: Text(_savedReminder!),
+        actions: [
+          TextButton(
+            onPressed: () {
+              deleteReminder();
+              Navigator.pop(buildContext!);
+            },
+            child: const Text('Apagar', style: TextStyle(color: Colors.red)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(buildContext!),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void readReminderAloud() {
+    if (_savedReminder != null && _savedReminder!.isNotEmpty) {
+      _speakAndWait("Seu lembrete é: $_savedReminder");
+    } else {
+      _speakAndWait("Você não tem nenhum lembrete salvo no momento.");
     }
   }
 }

@@ -27,7 +27,7 @@ class StatusBar extends PositionComponent {
       text: label,
       position: Vector2(0, -22),
       textRenderer: TextPaint(
-        style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+        style: const TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.bold),
       ),
     );
 

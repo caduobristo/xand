@@ -39,38 +39,13 @@ class MenuOverlay extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
         ElevatedButton(
-          onPressed: game.play,
-          child: const Text('Brincar'),
-        ),
-        const SizedBox(width: 8),
-        ElevatedButton(
-          onPressed: game.eat,
-          child: const Text('Comer'),
-        ),
-        const SizedBox(width: 8),
-        ElevatedButton(
-          onPressed: game.sleep,
-          child: const Text('Dormir'),
-        ),
-        const SizedBox(width: 8),
-        ElevatedButton(
           onPressed: () => game.hear(context), // Passa o context para hear()
           child: const Text('Falar com XAND'),
         ),
         const SizedBox(width: 8),
         ElevatedButton(
-          onPressed: game.playGuitar,
-          child: const Text('Tocar guitarra'),
-        ),
-        const SizedBox(width: 8),
-        ElevatedButton(
           onPressed: game.showCampfire,
           child: const Text('Fogueira'),
-        ),
-        const SizedBox(width: 8),
-        ElevatedButton(
-          onPressed: game.onPlayMinigame,
-          child: const Text('Xand, o Voador'),
         ),
         const SizedBox(width: 8),
         ElevatedButton(
@@ -86,6 +61,20 @@ class MenuOverlay extends StatelessWidget {
             game.setAlarm(now.add(const Duration(seconds: 15)));
           },
           child: const Text('Alarme'),
+        ),
+        const SizedBox(width: 8),
+        ElevatedButton(
+          onPressed: () {
+            game.saveReminder('Cagar na caixa de areia');
+          },
+          child: const Text('Salvar lembrete'),
+        ),
+        const SizedBox(width: 8),
+        ElevatedButton(
+          onPressed: () {
+            game.readReminderAloud();
+          },
+          child: const Text('Ler lembrete'),
         ),
         const SizedBox(width: 8),
       ],
