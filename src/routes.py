@@ -15,7 +15,6 @@ import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 import io
 
-
 load_dotenv()
 gemini_api_key = os.getenv("KEY_GEMINI")
 spotify_client_id = os.getenv("SPOTIFY_CLIENT_ID")
@@ -108,9 +107,106 @@ def get_curitiba_temperature(api_key):
         print(f"Erro ao obter temperatura de Curitiba: {e}")
         return "N/A" 
 
+def parse_duration_to_seconds(text):
+    total_seconds = 0
+    
+    # Regex para minutos
+    minutes_match = re.search(r'(\d+)\s*(minuto|minutos|min)', text, re.IGNORECASE)
+    if minutes_match:
+        mins = int(minutes_match.group(1))
+        total_seconds += mins * 60
+    else:
+        print("DEBUG_PARSE: Nenhum minuto encontrado.")
+
+    # Regex para segundos
+    seconds_match = re.search(r'(\d+)\s*(segundo|segundos|seg)', text, re.IGNORECASE)
+    if seconds_match:
+        secs = int(seconds_match.group(1))
+        total_seconds += secs
+    else:
+        print("DEBUG_PARSE: Nenhum segundo encontrado.")
+
+    if total_seconds == 0: # Só entra aqui se não achou minutos nem segundos
+        num_match = re.search(r'\b(\d+)\b', text, re.IGNORECASE) 
+        if num_match:
+            if "timer" in text.lower() or "alarme" in text.lower() or "cronômetro" in text.lower():
+                total_seconds = int(num_match.group(1))
+                print(f"DEBUG_PARSE: Fallback - Número puro encontrado: {total_seconds} (assumido segundos)")
+            else:
+                print(f"DEBUG_PARSE: Fallback - Número puro encontrado, mas sem palavra-chave de tempo relevante.")
+        else:
+            print(f"DEBUG_PARSE: Fallback - Nenhum número puro encontrado (regex \b(\d+)\b).")
+    else: 
+        print(f"DEBUG_PARSE: Já encontrou unidades de tempo, pulando fallback.")
+    
+    result = total_seconds if total_seconds > 0 else None
+    print(f"DEBUG_PARSE: parse_duration_to_seconds - Resultado final: {result}")
+    return result
+def parse_alarm_time_to_hhmmss(text):
+    print(f"DEBUG_PARSE: parse_alarm_time_to_hhmmss - Texto de entrada: '{text}'")
+    
+    # 1. Tenta HH:MM:SS ou HH:MM
+    time_match = re.search(r'(\d{1,2}):(\d{2})(?::(\d{2}))?', text)
+    if time_match:
+        h = int(time_match.group(1))
+        m = int(time_match.group(2))
+        s = int(time_match.group(3)) if time_match.group(3) else 0
+        result = f"{h:02d}:{m:02d}:{s:02d}"
+        print(f"DEBUG_PARSE: HH:MM:SS/HH:MM encontrado: {result}")
+        return result
+
+    # 2. Tenta linguagem natural
+    hour = None
+    minute = 0
+    second = 0
+
+    # Match para "X horas"
+    hour_match = re.search(r'(\d{1,2})\s*horas', text, re.IGNORECASE)
+    if hour_match:
+        hour = int(hour_match.group(1))
+        print(f"DEBUG_PARSE: Horas por extenso: {hour}")
+    
+    # Match para "e X minutos" ou "X minutos"
+    minute_match = re.search(r'(?:e\s*)?(\d{1,2})\s*minutos', text, re.IGNORECASE)
+    if minute_match:
+        minute = int(minute_match.group(1))
+        print(f"DEBUG_PARSE: Minutos por extenso: {minute}")
+
+    # Match para "e meia"
+    if 'e meia' in text.lower() and hour is not None:
+        minute = 30
+        print(f"DEBUG_PARSE: 'e meia' detectado, minuto: {minute}")
+    
+    # Palavras-chave específicas
+    if 'meia noite' in text.lower():
+        hour = 0
+        minute = 0
+        print("DEBUG_PARSE: 'meia noite' detectado")
+    elif 'meio dia' in text.lower():
+        hour = 12
+        minute = 0
+        print("DEBUG_PARSE: 'meio dia' detectado")
+
+    # AM/PM detection for conversion to 24h
+    if hour is not None:
+        if ('da tarde' in text.lower() or 'da noite' in text.lower() or 'pm' in text.lower()) and hour < 12:
+            hour += 12
+            print(f"DEBUG_PARSE: AM/PM - Convertido para {hour} (PM/noite)")
+        elif ('da manhã' in text.lower() or 'am' in text.lower()) and hour == 12:
+            hour = 0
+            print(f"DEBUG_PARSE: AM/PM - Convertido 12 AM para {hour}")
+    
+    if hour is not None:
+        result = f"{hour:02d}:{minute:02d}:{second:02d}"
+        print(f"DEBUG_PARSE: parse_alarm_time_to_hhmmss - Resultado por extenso: {result}")
+        return result
+    
+    print("DEBUG_PARSE: parse_alarm_time_to_hhmmss - Nenhum formato de tempo reconhecido")
+    return None
+
+
 @main.post('/xand/ask')
 def xand_ask():
-    # --- PROMPT ATUALIZADO (com "acao:", HH:MM:SS para alarme e Repetir Fala ajustado) ---
     base_prompt = """
     Você é o XAND, um assistente virtual com personalidade carismática e divertida.
     Sua tarefa é interpretar a **intenção principal** do usuário a partir do **texto** e responder **EXATAMENTE** no formato tabelado abaixo.
@@ -254,8 +350,6 @@ def xand_ask():
         
         gemini_response_text = response_model_flash.text.strip()
         
-        print(f"DEBUG: Resposta bruta do Gemini Flash: {gemini_response_text}")
-        
         if gemini_response_text.startswith('```') and gemini_response_text.endswith('```'):
             gemini_response_text = gemini_response_text[3:-3].strip() 
             if gemini_response_text.startswith('python\n'): 
@@ -266,6 +360,14 @@ def xand_ask():
         print(f"DEBUG: Resposta bruta do Gemini Flash (limpa): {gemini_response_text}")
 
         final_response_for_frontend = gemini_response_text
+        
+        print(f"DEBUG_MATCH: final_response_for_frontend: '{final_response_for_frontend}'")
+        print(f"DEBUG_MATCH: transcribed_text: '{transcribed_text}'")
+        print(f"DEBUG_MATCH: Checking 'timer:' -> {final_response_for_frontend.startswith('timer: ')}")
+        print(f"DEBUG_MATCH: Checking 'alarme:' -> {final_response_for_frontend.startswith('alarme: ')}")
+        print(f"DEBUG_MATCH: Checking 'horario:' -> {final_response_for_frontend.startswith('horario: ')}")
+        print(f"DEBUG_MATCH: Checking 'temperatura:' -> {final_response_for_frontend.startswith('temperatura: ')}")
+        print(f"DEBUG_MATCH: Checking 'acao:' (geral) -> {final_response_for_frontend.startswith('acao: ')}")
 
         # 1. Substituição de HORÁRIO 
         if final_response_for_frontend.startswith('horario: {{hora_atual}}'): 
@@ -278,27 +380,26 @@ def xand_ask():
             final_response_for_frontend = final_response_for_frontend.replace("{{temperatura_curitiba_celsius}}", temp_curitiba)
         
         # 3. Tratamento de AÇÕES (timer, alarme)
-        elif final_response_for_frontend.startswith('acao: timer: '):
-            match = re.search(r'acao: timer: (\d+)', final_response_for_frontend) 
+        elif final_response_for_frontend.startswith('timer: '): 
+            match = re.search(r'timer: (\d+)', final_response_for_frontend) 
             if match:
                 duration_seconds = int(match.group(1))
-                print(f"DEBUG: Comando Timer com duração de {duration_seconds} segundos")
-                final_response_for_frontend = f"acao: timer: {duration_seconds}" 
+                final_response_for_frontend = f"timer: {duration_seconds}" 
+                print(f"DEBUG: Comando Timer com duração de {duration_seconds} segundos (Extraído do Gemini)")
             else:
                 final_response_for_frontend = "NULL" 
         
-        elif final_response_for_frontend.startswith('acao: alarme: '):
-            # Regex para capturar HH:MM:SS ou HH:MM
-            match = re.search(r'acao: alarme: (\d{2}:\d{2}:\d{2})', final_response_for_frontend) # Match HH:MM:SS
+        elif final_response_for_frontend.startswith('alarme: '): 
+            match = re.search(r'alarme: (\d{2}:\d{2}:\d{2})', final_response_for_frontend) 
             if match:
                 alarm_time_str = match.group(1)
-                print(f"DEBUG: Comando Alarme para {alarm_time_str}")
-                final_response_for_frontend = f"acao: alarme: {alarm_time_str}"
+                final_response_for_frontend = f"alarme: {alarm_time_str}"
+                print(f"DEBUG: Comando Alarme para {alarm_time_str} (Extraído do Gemini)")
             else:
                 final_response_for_frontend = "NULL" 
 
-        elif final_response_for_frontend == 'acao: cancelar alarme': 
-             pass # A string já está pronta
+        elif final_response_for_frontend == 'cancelar alarme': 
+             pass 
 
         # 4. Tratamento de Repetir Fala
         elif final_response_for_frontend.startswith('TEXTO: {{frase_a_repetir}}'):

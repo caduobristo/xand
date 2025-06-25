@@ -321,21 +321,21 @@ class Xand extends FlameGame {
           onPlayMinigame();
         } 
         // --- Lógica para TIMER e ALARME por voz ---
-        else if (comando.startsWith('acao: timer:')) {
-            final parts = comando.split(':');
-            if (parts.length == 3 && int.tryParse(parts[2].trim()) != null) {
-                final seconds = int.parse(parts[2].trim());
+        else if (comando.startsWith('timer:')) { 
+            final parts = comando.split(':'); 
+            if (parts.length == 2 && int.tryParse(parts[1].trim()) != null) { 
+                final seconds = int.parse(parts[1].trim());
                 await _speakAndWait('Certo! Iniciando seu cronômetro para $seconds segundos.');
                 startTimer(Duration(seconds: seconds));
             } else {
                 await _speakAndWait('Desculpe, não entendi a duração do cronômetro.');
             }
-        } else if (comando.startsWith('acao: alarme:')) {
+        } else if (comando.startsWith('alarme:')) { 
             final parts = comando.split(':'); 
-            if (parts.length == 5 && parts[1].trim() == 'alarme') { 
-                final hourStr = parts[2].trim();
-                final minuteStr = parts[3].trim();
-                final secondStr = parts[4].trim();
+            if (parts.length >= 3 && parts[0].trim() == 'alarme') { 
+                final hourStr = parts[1].trim();
+                final minuteStr = parts[2].trim();
+                final secondStr = parts.length == 4 ? parts[3].trim() : '00'; 
 
                 try {
                   final now = DateTime.now();
@@ -353,12 +353,12 @@ class Xand extends FlameGame {
                   setAlarm(alarmTime);
                 } catch (e) {
                   await _speakAndWait('Desculpe, não consegui configurar o alarme com o horário fornecido.');
-                  print('Erro de parsing de alarme: $e'); 
+                  print('Erro de parsing de alarme: $e');
                 }
             } else {
                 await _speakAndWait('Desculpe, não entendi o formato do alarme. Por favor, diga "alarme para 07:30:00" por exemplo.');
             }
-        } else if (comando == 'acao: cancelar alarme') { 
+        } else if (comando == 'cancelar alarme') {
           await _speakAndWait('Alarme cancelado!');
           cancelAlarm();
         }
@@ -377,7 +377,7 @@ class Xand extends FlameGame {
             }
             textToSpeak = textToSpeak.replaceAll("'", "").replaceAll("`", "").replaceAll("´", "");
 
-            _speak(textToSpeak); // Dispara a fala e CONTINUA IMEDIATAMENTE
+            _speak(textToSpeak); // Dispara a fala e continua imediatamente
             if (context.mounted) {
               showDialog(
                 context: context,
