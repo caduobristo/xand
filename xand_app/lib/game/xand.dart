@@ -55,10 +55,6 @@ class Xand extends FlameGame {
 
   final VoidCallback onPlayMinigame;
 
-  late FlutterTts flutterTts;
-
-  Completer<void>? _speechCompleter;
-
   Xand({required this.onPlayMinigame});
 
   @override
@@ -74,17 +70,6 @@ class Xand extends FlameGame {
       'meio_triste.png',
       'triste.png'
     ]);
-
-    flutterTts = FlutterTts();
-    await flutterTts.setLanguage("pt-BR"); 
-    await flutterTts.setSpeechRate(1.0);   
-    await flutterTts.setVolume(1.0);       
-    await flutterTts.setPitch(2.0);
-
-    flutterTts.setCompletionHandler(() { 
-      _speechCompleter?.complete();
-      _speechCompleter = null;
-    });
 
     final barSize = Vector2(150, 20);
     _hungerBar = StatusBar(label: 'Fome', initialValue: _hunger, position: Vector2(30, 30), size: barSize);
@@ -295,22 +280,16 @@ class Xand extends FlameGame {
 
         final String comando = fala.toString().replaceAll("'", "").replaceAll("`", "").replaceAll("´", "").trim().toLowerCase();
         if (comando == 'dormir') {
-          await _speakAndWait('Hmm, que soninho, vou nanar!');
           sleep();
         } else if (comando == 'acordar'){
-          await _speakAndWait('Bora pra mais uma!');
           sleep();
         } else if (comando == 'brincar') {
-          await _speakAndWait('Oba! Vamos brincar!');
           play();
         } else if (comando == 'tocar guitarra') {
-          await _speakAndWait('Pega esse solo de guitarra!');
           playGuitar();
         } else if (comando == 'comer') {
-          await _speakAndWait('Hmm, que delícia! Vou comer!');
           eat();
         } else if (comando == 'jogar'){
-          await _speakAndWait('Preparar, apontar, Xand, o Voador!');
           onPlayMinigame();
         } else {
           if (context.mounted) showDialog(
@@ -394,23 +373,6 @@ class Xand extends FlameGame {
         overlays.add('MenuOverlay');
       });
     }
-  }
-
-  Future<void> _speak(String text) async {
-    if (text.isEmpty) return;
-    await flutterTts.speak(text);
-  }
-
-  Future<void> _speakAndWait(String text) async {
-    if (text.isEmpty) return;
-
-    if (_speechCompleter != null && !_speechCompleter!.isCompleted) {
-      _speechCompleter!.complete();
-    }
-    _speechCompleter = Completer<void>();
-
-    await flutterTts.speak(text);
-    return _speechCompleter!.future;
   }
 
   Future<void> startRecording() async {
