@@ -14,24 +14,25 @@ import 'package:flutter/material.dart'; // Necessário para BuildContext e Alert
 import 'package:http_parser/http_parser.dart'; // Necessário para MediaType
 import 'package:vibration/vibration.dart';
 import 'package:xand/components/status_bar.dart';
-import 'package:flutter_tts/flutter_tts.dart'; // TTS para fala 
-import 'dart:async';
 
 class Xand extends FlameGame {
   late Pet _pet;
+  // Flags de funções
   bool isNight = false;
   bool _isPetting = false;
   bool _playingGuitar = false;
   bool _ambient = false;
+  bool _alarm = false;
 
+  // Barras de status
   double _hunger = 1.0;
   double _energy = 1.0;
   double _fun = 1.0;
-
   late StatusBar _hungerBar;
   late StatusBar _energyBar;
   late StatusBar _funBar;
 
+  // Flags de sprites
   String _defaultSprite = 'respirando.png';
   String _currentAnimation = 'respirando.png';
   late TimerComponent _meowTimer;
@@ -42,6 +43,15 @@ class Xand extends FlameGame {
   final AudioPlayer _audioPlayer = AudioPlayer();
   SpriteAnimationComponent? cover;
   AudioPlayer? _ambientPlayer;
+
+  // Cronômetro
+  final ValueNotifier<int> stopwatchSecondsNotifier = ValueNotifier(0);
+  late TimerComponent _stopwatchTimer;
+  bool isStopwatchRunning = false;
+
+  // Alarme
+  late TextComponent _alarmText;
+  TimerComponent? _alarmTimer;
 
   final VoidCallback onPlayMinigame;
 
@@ -94,18 +104,56 @@ class Xand extends FlameGame {
       period: 10.0,
       repeat: true,
       onTick: () {
-        if (!isNight && !_playingGuitar && !_ambient) {
+        if (!isNight && !_playingGuitar && !_ambient &&
+            !_alarm &&  !isStopwatchRunning && _currentAnimation == _defaultSprite) {
           AudioPlayer().play(AssetSource('audios/meow.mp3'));
         }
       },
     );
     add(_meowTimer);
 
+    // Cria o timer
+    _stopwatchTimer = TimerComponent(
+      period: 1.0,
+      repeat: true,
+      onTick: () {
+        if (stopwatchSecondsNotifier.value > 0) {
+          stopwatchSecondsNotifier.value--;
+        } else {
+          _stopwatchTimer.timer.pause();
+          AudioPlayer().play(AssetSource('audios/timer.mp3'));
+          print("TIMER FINALIZADO!");
+          if (overlays.isActive('StopwatchOverlay')) {
+            hideStopwatch();
+            isStopwatchRunning = false;
+          }
+        }
+      },
+    );
+    _stopwatchTimer.timer.pause();
+    add(_stopwatchTimer);
+
+    _alarmText = TextComponent(
+      text: 'Alarme: Nenhum',
+      position: Vector2(size.x - 10, 10),
+      anchor: Anchor.topRight,
+      textRenderer: TextPaint(
+        style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+      ),
+    );
+    add(_alarmText);
+
     _pet = Pet(imageName: _defaultSprite, frameCount: 4, stepTime: 0.5)
       ..position = size / 2;
 
     add(_pet);
     overlays.add('MenuOverlay');
+  }
+
+  @override
+  void onMount() {
+    super.onMount();
+    _loadSavedAlarm();
   }
 
   @override
@@ -124,7 +172,7 @@ class Xand extends FlameGame {
     if (_currentAnimation != _defaultSprite ||
         _isPetting || _ambient || _playingGuitar) return;
 
-    if (await Vibration.hasVibrator() ?? false) {
+    if (await Vibration.hasVibrator()) {
       Vibration.vibrate(pattern: [0, 200], repeat: 0);
     }
     _isPetting = true;
@@ -141,7 +189,7 @@ class Xand extends FlameGame {
   void stopPetting() async {
     if (!_isPetting) return;
 
-    if (await Vibration.hasVibrator() ?? false) {
+    if (await Vibration.hasVibrator()) {
       Vibration.cancel();
     }
     _isPetting = false;
@@ -264,67 +312,21 @@ class Xand extends FlameGame {
         } else if (comando == 'jogar'){
           await _speakAndWait('Preparar, apontar, Xand, o Voador!');
           onPlayMinigame();
-        } else if (fala.startsWith('horario:') || 
-                   fala.startsWith('temperatura:') || 
-                   fala.startsWith('Sim!, estou te ouvindo, diga o que quer que eu fale!') ||
-                   fala.startsWith('TEXTO:')) {
-            String textToSpeak = fala;
-            if (textToSpeak.startsWith('TEXTO:')) {
-                textToSpeak = textToSpeak.substring(6).trim(); 
-            }
-            _speak(textToSpeak);;
-            if (context.mounted) {
-              showDialog(
-                context: context,
-                builder: (_) => AlertDialog(
-                  title: const Text('XAND Responde'),
-                  content: Text(fala), 
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('OK'),
-                    ),
-                  ],
-                ),
-              );
-            }
-        } 
-        else if (fala == 'NULL') {
-            await _speak('Desculpe, não entendi o que você disse.');
-            if (context.mounted) {
-              showDialog(
-                context: context,
-                builder: (_) => AlertDialog(
-                  title: const Text('XAND Responde'),
-                  content: const Text('Desculpe, não entendi o que você disse.'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('OK'),
-                    ),
-                  ],
-                ),
-              );
-            }
-        }
-        else {
-            _speak(fala);
-            if (context.mounted) {
-              showDialog(
-                context: context,
-                builder: (_) => AlertDialog(
-                  title: const Text('XAND Responde'),
-                  content: Text(fala),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('OK'),
-                    ),
-                  ],
-                ),
-              );
-            }
-        }
+        } else {
+          if (context.mounted) showDialog(
+              context: context,
+              builder: (_) => AlertDialog(
+                title: const Text('XAND Responde'),
+                content: Text(fala),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('OK'),
+                  ),
+                ],
+              ),
+            );
+          }
 
       } else {
         print('Erro ao enviar o arquivo de áudio para XAND. Status code: ${response.statusCode}');
@@ -557,6 +559,89 @@ class Xand extends FlameGame {
     final isIdle = ['respirando.png', 'meio_triste.png', 'triste.png'].contains(_currentAnimation);
     if (isIdle && _currentAnimation != _defaultSprite) {
       _switchPetAnimation(_defaultSprite, 4, 0.5);
+    }
+  }
+
+  void startTimer(Duration duration) {
+    _stopwatchTimer.timer.pause();
+    stopwatchSecondsNotifier.value = duration.inSeconds;
+
+    if (stopwatchSecondsNotifier.value > 0) {
+      isStopwatchRunning = true;
+      _stopwatchTimer.timer.start();
+    }
+
+    overlays.remove('MenuOverlay');
+    overlays.add('StopwatchOverlay');
+  }
+
+  void hideStopwatch() {
+    isStopwatchRunning = false;
+    _stopwatchTimer.timer.pause();
+    overlays.remove('StopwatchOverlay');
+    overlays.add('MenuOverlay');
+  }
+
+  void cancelAlarm() async {
+    _alarmTimer?.removeFromParent();
+    _alarmText.text = 'Alarme: Nenhum';
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('saved_alarm');
+  }
+
+  // Função para definir um Alarme
+  void setAlarm(DateTime alarmTime) async {
+    if (!isLoaded) return;
+
+    // Cancela qualquer alarme anterior
+    cancelAlarm();
+
+    final now = DateTime.now();
+    // Verifica se o tempo do alarme já passou
+    if (alarmTime.isBefore(now)) {
+      print("Tempo do alarme já passou");
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('saved_alarm', alarmTime.toIso8601String());
+
+    // Calcula a duração até o alarme
+    final duration = alarmTime.difference(now);
+    final formattedTime = DateFormat('HH:mm:ss').format(alarmTime);
+    _alarmText.text = 'Alarme: $formattedTime';
+
+    // Cria um timer de uso único
+    _alarmTimer = TimerComponent(
+      period: duration.inSeconds.toDouble(),
+      removeOnFinish: true,
+      onTick: () {
+        _alarmText.text = 'Alarme: Nenhum';
+        cancelAlarm();
+        _alarm = true;
+        final alarmSoundPlayer = AudioPlayer();
+        alarmSoundPlayer.onPlayerComplete.listen((event) {
+          _alarm = false;
+          alarmSoundPlayer.dispose();
+        });
+        alarmSoundPlayer.play(AssetSource('audios/alarme.mp3'));
+      },
+    );
+    add(_alarmTimer!);
+  }
+
+  Future<void> _loadSavedAlarm() async {
+    final prefs = await SharedPreferences.getInstance();
+    final alarmString = prefs.getString('saved_alarm');
+
+    if (alarmString != null) {
+      final alarmTime = DateTime.parse(alarmString);
+      if (alarmTime.isAfter(DateTime.now())) {
+        print('Alarme salvo encontrado, reativando para: $alarmTime');
+        setAlarm(alarmTime);
+      } else {
+        await prefs.remove('saved_alarm');
+      }
     }
   }
 }

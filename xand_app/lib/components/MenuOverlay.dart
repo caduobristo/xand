@@ -72,6 +72,22 @@ class MenuOverlay extends StatelessWidget {
           onPressed: game.onPlayMinigame,
           child: const Text('Xand, o Voador'),
         ),
+        const SizedBox(width: 8),
+        ElevatedButton(
+          onPressed: () {
+            game.startTimer(const Duration(minutes: 1));
+          },
+          child: const Text('Timer'),
+        ),
+        const SizedBox(width: 8),
+        ElevatedButton(
+          onPressed: () {
+            final now = DateTime.now();
+            game.setAlarm(now.add(const Duration(seconds: 15)));
+          },
+          child: const Text('Alarme'),
+        ),
+        const SizedBox(width: 8),
       ],
     );
   }
