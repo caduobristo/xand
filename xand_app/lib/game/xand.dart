@@ -68,20 +68,17 @@ class Xand extends FlameGame {
 
   Completer<void>? _speechCompleter;
 
+  TimerComponent? _currentActionTimer;
+
   Xand({required this.onPlayMinigame});
 
   @override
   Future<void> onLoad() async {
     await images.loadAll([
       _defaultSprite,
-      'comendo.png',
-      'bolinha.png',
-      'dormindo.png',
-      'escutando.png',
-      'guitarra.png',
-      'carinho.png',
-      'meio_triste.png',
-      'triste.png'
+      'comendo.png', 'bolinha.png', 'dormindo.png',
+      'escutando.png', 'guitarra.png', 'carinho.png',
+      'meio_triste.png', 'triste.png', 'falando.png'
     ]);
     _setupTts();
     _setupStatusBars();
@@ -108,6 +105,7 @@ class Xand extends FlameGame {
       _speechCompleter?.complete();
       _speechCompleter = null;
       _speaking = false;
+      _switchPetAnimation(_defaultSprite, 4, 0.5);
     });
   }
 
@@ -152,7 +150,7 @@ class Xand extends FlameGame {
         } else {
           _stopwatchTimer.timer.pause();
           isStopwatchRunning = false;
-          AudioPlayer().play(AssetSource('audios/timer_end_sound.mp3'));
+          AudioPlayer().play(AssetSource('audios/timer.mp3'));
           if (overlays.isActive('StopwatchOverlay')) {
             hideStopwatch();
           }
@@ -228,33 +226,49 @@ class Xand extends FlameGame {
 
   // Métodos de ação
   void play() async {
+    if (_isActionRunning()) return; // Previne ações sobrepostas
+
     stopPetting();
     overlays.remove('MenuOverlay');
-    await _switchPetAnimation('bolinha.png', 3, 0.2, duration: 4);
+    overlays.add('ActionCancelOverlay');
 
-    _fun = (_fun + 0.4).clamp(0.0, 1.0);
-    _funBar.updateValue(_fun);
+    _switchPetAnimation('bolinha.png', 3, 0.2);
 
-    _energy = (_energy - 0.2).clamp(0.0, 1.0);
-    _energyBar.updateValue(_energy);
+    _currentActionTimer = TimerComponent(
+      period: 4.0,
+      removeOnFinish: true,
+      onTick: () {
+        _fun = (_fun + 0.4).clamp(0.0, 1.0);
+        _funBar.updateValue(_fun);
+        _energy = (_energy - 0.2).clamp(0.0, 1.0);
+        _energyBar.updateValue(_energy);
 
-    _checkPetNeeds();
-
-    await _switchPetAnimation(_defaultSprite, 4, 0.5);
-    overlays.add('MenuOverlay');
+        cancelCurrentAction(); // Usa a função de cancelamento para limpar tudo
+      },
+    );
+    add(_currentActionTimer!);
   }
 
-  void eat() async {
+  void eat() {
+    if (_isActionRunning()) return;
+
     stopPetting();
     overlays.remove('MenuOverlay');
-    await _switchPetAnimation('comendo.png', 4, 0.2, duration: 4);
+    overlays.add('ActionCancelOverlay');
 
-    _hunger = (_hunger + 0.3).clamp(0.0, 1.0);
-    _hungerBar.updateValue(_hunger);
-    _checkPetNeeds();
+    _switchPetAnimation('comendo.png', 4, 0.2);
 
-    await _switchPetAnimation(_defaultSprite, 4, 0.5);
-    overlays.add('MenuOverlay');
+    _currentActionTimer = TimerComponent(
+      period: 4.0,
+      removeOnFinish: true,
+      onTick: () {
+        _hunger = (_hunger + 0.3).clamp(0.0, 1.0);
+        _hungerBar.updateValue(_hunger);
+
+        cancelCurrentAction();
+      },
+    );
+    add(_currentActionTimer!);
   }
 
   void sleep() async {
@@ -262,9 +276,9 @@ class Xand extends FlameGame {
     isNight = !isNight;
 
     if(isNight){
-      await _switchPetAnimation('dormindo.png', 4, 0.5);
+      _switchPetAnimation('dormindo.png', 4, 0.5);
     } else{
-      await _switchPetAnimation(_defaultSprite, 4, 0.5);
+      _switchPetAnimation(_defaultSprite, 4, 0.5);
     }
 
     _checkPetNeeds();
@@ -504,8 +518,12 @@ class Xand extends FlameGame {
 
   void playGuitar() async {
     if (!_playingGuitar) {
+      if (_isActionRunning()) return;
+
       _playingGuitar = true;
       overlays.remove('MenuOverlay');
+      overlays.add('ActionCancelOverlay');
+
       _switchCover(
           sprite: 'guitarra.png',
           stepTime: 0.15,
@@ -516,18 +534,22 @@ class Xand extends FlameGame {
       await _audioPlayer.play(AssetSource('audios/guitar.mp3'));
 
       _audioPlayer.onPlayerComplete.listen((event) {
-        if (cover != null && children.contains(cover!)) {
-          remove(cover!);
+        if (_playingGuitar) {
           _fun = (_fun + 0.6).clamp(0.0, 1.0);
           _funBar.updateValue(_fun);
           _energy = (_energy - 0.2).clamp(0.0, 1.0);
           _energyBar.updateValue(_energy);
           _checkPetNeeds();
+          cancelCurrentAction();
         }
         _playingGuitar = false;
         overlays.add('MenuOverlay');
       });
     }
+  }
+
+  bool _isActionRunning() {
+    return _currentActionTimer != null || _playingGuitar || isNight || isRecording || _speaking;
   }
 
   void playPiano() async {
@@ -567,6 +589,8 @@ class Xand extends FlameGame {
     if (text.isEmpty) return;
     _speaking = true;
 
+    _switchPetAnimation('falando.png', 2, 0.1);
+
     if (_speechCompleter != null && !_speechCompleter!.isCompleted) {
       _speechCompleter!.complete();
     }
@@ -586,7 +610,7 @@ class Xand extends FlameGame {
         isRecording = true;
         overlays.remove('MenuOverlay');
         overlays.add('MenuOverlay');
-        await _switchPetAnimation('escutando.png', 4, 0.5);
+        _switchPetAnimation('escutando.png', 4, 0.5);
         print('Gravando em: $path');
       } else {
         print("Permissão de gravação negada.");
@@ -599,7 +623,7 @@ class Xand extends FlameGame {
   Future<String?> stopRecording() async {
     try {;
       String? path = await _recorder.stop();
-      await _switchPetAnimation(_defaultSprite, 4, 0.5);
+      _switchPetAnimation(_defaultSprite, 4, 0.5);
       print("Gravação parada. Arquivo salvo em: $path");
       isRecording = false;
       overlays.remove('MenuOverlay');
@@ -612,12 +636,7 @@ class Xand extends FlameGame {
   }
 
   // Utilitário para trocar animações do pet
-  Future<void> _switchPetAnimation(
-      String sprite,
-      int frameCount,
-      double stepTime, {
-        int duration = 0,
-      }) async {
+  void _switchPetAnimation(String sprite, int frameCount, double stepTime) {
     _currentAnimation = sprite;
     if (_currentAnimation == _defaultSprite && !isNight) {
       _meowTimer.timer.resume();
@@ -625,11 +644,12 @@ class Xand extends FlameGame {
       _meowTimer.timer.pause();
     }
 
-    remove(_pet);
+    if (children.contains(_pet)) {
+      remove(_pet);
+    }
     _pet = Pet(imageName: sprite, frameCount: frameCount, stepTime: stepTime)
       ..position = size / 2;
     add(_pet);
-    await Future.delayed(Duration(seconds: duration));
   }
 
   Future<void> _switchCover({
@@ -864,6 +884,26 @@ class Xand extends FlameGame {
       _speakAndWait("Seu lembrete é: $_savedReminder");
     } else {
       _speakAndWait("Você não tem nenhum lembrete salvo no momento.");
+    }
+  }
+
+  void cancelCurrentAction() {
+    if (_playingGuitar) {
+      _audioPlayer.stop();
+      if (cover != null && children.contains(cover!)) {
+        remove(cover!);
+      }
+      _playingGuitar = false;
+    }
+
+    _currentActionTimer?.removeFromParent();
+    _currentActionTimer = null;
+
+    _switchPetAnimation(_defaultSprite, 4, 0.5);
+
+    overlays.remove('ActionCancelOverlay');
+    if (!overlays.isActive('MenuOverlay')) {
+      overlays.add('MenuOverlay');
     }
   }
 }
