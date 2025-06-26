@@ -343,6 +343,14 @@ class Xand extends FlameGame {
         } else if (comando == 'brincar') {
           await _speakAndWait('Oba! Vamos brincar!');
           play();
+        } else if (comando == 'tocar musica') {
+          if (parts.length == 2 && int.tryParse(parts[1].trim()) != null) { 
+                final track = int.parse(parts[1].trim());
+                await _speakAndWait('Vou procurar a música para você!');
+                playMusic(track);
+            } else {
+                await _speakAndWait('Desculpe, não entendi a música que você pediu.');
+            }
         } else if (comando == 'tocar guitarra') {
           await _speakAndWait('Pega esse solo de guitarra!');
           playGuitar();
@@ -513,6 +521,27 @@ class Xand extends FlameGame {
           ),
         );
       }
+    }
+  }
+
+  void playMusic(track) async {
+    final Uri spotifyUri = Uri.parse('spotify:track:$track'); 
+     if (!await launchUrl(spotifyUri, mode: LaunchMode.externalApplication)) {
+      // try opening the web URL as a fallback.
+      final Uri webUrl = Uri.parse('https://open.spotify.com/track/$track');
+      if (!await launchUrl(webUrl, mode: LaunchMode.externalApplication)) {
+        setState(() {
+          _message = 'Não foi possível abrir o Spotify. Verifique se o aplicativo está instalado.';
+        });
+      } else {
+        setState(() {
+          _message = 'Abrindo o Spotify no navegador (fallback)...';
+        });
+      }
+    } else {
+      setState(() {
+        _message = 'Abrindo o Spotify...';
+      });
     }
   }
 

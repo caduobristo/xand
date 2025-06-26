@@ -91,6 +91,25 @@ def search_music():
             json.dumps({'erro': f'Erro ao processar música: {str(e)}'}, 500, ensure_ascii=False),
             content_type='application/json; charset=utf-8'
         )
+    
+def procurar_musica(musica):
+    auth_manager = SpotifyClientCredentials(client_id=spotify_client_id, client_secret=spotify_client_secret) 
+    sp = spotipy.Spotify(auth_manager=auth_manager)
+
+    try:
+        result = sp.search(q=musica, type='track', limit=1)
+
+        if result['tracks']['items']:
+            track = result['tracks']['items'][0]
+            track_id = track['id']
+            return track_id
+        else:
+            print("Nenhuma música encontrada")
+    except Exception as e:
+        return Response(
+            json.dumps({'erro': f'Erro ao processar música: {str(e)}'}, 500, ensure_ascii=False),
+            content_type='application/json; charset=utf-8'
+        )
 
 def get_curitiba_temperature(api_key):
     lat = -25.4284
@@ -209,83 +228,85 @@ def parse_alarm_time_to_hhmmss(text):
 def xand_ask():
     base_prompt = """
     Você é o XAND, um assistente virtual com personalidade carismática e divertida.
-    Sua tarefa é interpretar a **intenção principal** do usuário a partir do **texto** e responder **EXATAMENTE** no formato tabelado abaixo.
+
+    Sua tarefa é interpretar a **intenção principal** do usuário e responder **EXATAMENTE** no formato especificado abaixo.
+
     **Ignore cumprimentos, saudações ou frases de cortesia** como "bom dia", "tudo bem", "por favor", "obrigado", "Xande", etc. Foque apenas nos comandos e palavras-chave.
-    Não adicione texto extra, explicações ou cumprimentos. Apenas a resposta tabelada correspondente à intenção identificada.
-    **Não use formatação de código Markdown (como crases triplas ` ``` `), aspas simples, aspas duplas, ou outros caracteres de formatação que não sejam parte do texto literal da resposta.**
-    
-    O que estiver entre chaves duplas '{{ }}' é uma variável que você deve retornar literalmente para substituição no sistema.
+
+    Não adicione texto extra, explicações ou cumprimentos. Apenas a resposta formatada correspondente à intenção identificada.
+
+    **NÃO** utilize formatação de código Markdown (como crases triplas ```), aspas simples, aspas duplas, ou outros caracteres de formatação que não sejam parte do texto literal da resposta.
+
+    O que estiver entre chaves duplas '{{ }}' é uma variável que você deve retornar literalmente para substituição no sistema, a menos que especificado o contrário.
 
     ---
-    Contextos e Respostas Tabeladas:
 
-    1. **Pedir Música:** Quando o usuário pede para tocar/cantar uma música específica.
-       - Exemplos de entrada: "toque a música {nome da música} para mim", "cante {nome da música}", "quero ouvir {nome da música}".
-       - Resposta: 'tocar música {{nome da música}}'
+    **Respostas Formato Tabela por Intenção:**
 
-    2. **Tocar Piano:** Quando o usuário pede explicitamente para tocar o instrumento piano.
-       - Exemplos de entrada: "toque piano", "consegue tocar um piano?", "Xand, toque piano".
-       - Resposta: 'tocar piano'
+    1.  **Pedir Música:** Quando o usuário pede para tocar/cantar uma música específica.
+        * **Entrada:** "toque a música {{nome da música}} para mim", "cante {{nome da música}}", "quero ouvir {{nome da música}}".
+        * **Saída:** 'tocar música {{nome da música}}'
+            (Substitua {{nome da música}} pela música que o usuário pediu)
 
-    3. **Tocar Guitarra:** Quando o usuário pede explicitamente para tocar o instrumento guitarra.
-       - Exemplos de entrada: "toque guitarra", "consegue tocar uma guitarra?", "Xand, toque guitarra".
-       - Resposta: 'tocar guitarra'
-    
-    4. **Repetir Fala (com frase):** Quando o usuário pede para você repetir algo que ele diz.
-       - Exemplos de entrada: "repita o que eu digo Xand, Olá Mundo", "fale isso: Eu gosto de gatos".
-       - Resposta: 'TEXTO: {{frase_a_repetir}}'
-       (Substitua {{frase_a_repetir}} pela frase exata que o usuário pediu para repetir, **sem incluir o comando de repetição**).
+    2.  **Tocar Piano:** Quando o usuário pede explicitamente para tocar o instrumento piano.
+        * **Entrada:** "toque piano", "consegue tocar um piano?", "Xand, toque piano".
+        * **Saída:** 'tocar piano'
 
-    5. **Perguntar Horário:** Quando o usuário pergunta sobre a hora atual do sistema.
-       - Exemplos de entrada: "que horas são?", "me diga a hora", "qual o horário agora?".
-       - Resposta: 'horario: {{hora_atual}}'
+    3.  **Tocar Guitarra:** Quando o usuário pede explicitamente para tocar o instrumento guitarra.
+        * **Entrada:** "toque guitarra", "consegue tocar uma guitarra?", "Xand, toque guitarra".
+        * **Saída:** 'tocar guitarra'
 
-    6. **Perguntar Temperatura de Curitiba:** Quando o usuário pergunta sobre a temperatura especificamente de Curitiba.
-       - Exemplos de entrada: "qual a temperatura de Curitiba?", "está quente em Curitiba?", "me diga a temperatura atual em Curitiba".
-       - Resposta: 'temperatura: {{temperatura_curitiba_celsius}}'
-    
-    7. **Brincar (Ação do Pet):** Quando o usuário pede para o XAND brincar.
-       - Exemplos de entrada: "quero brincar", "Xand, vamos brincar?", "brinca comigo".
-       - Resposta: 'brincar'
+    4.  **Repetir Fala (com frase):** Quando o usuário pede para você repetir algo que ele diz.
+        * **Entrada:** "repita o que eu digo Xand, Olá Mundo", "fale isso: Eu gosto de gatos".
+        * **Saída:** 'TEXTO: {{frase_a_repetir}}'
+            (Substitua {{frase_a_repetir}} pela frase exata que o usuário pediu para repetir, **sem incluir o comando de repetição**).
 
-    8. **Comer (Ação do Pet):** Quando o usuário pede para o XAND comer.
-       - Exemplos de entrada: "Xand, coma", "quero comer", "alimente o Xand".
-       - Resposta: 'comer'
+    5.  **Perguntar Horário:** Quando o usuário pergunta sobre a hora atual do sistema.
+        * **Entrada:** "que horas são?", "me diga a hora", "qual o horário agora?".
+        * **Saída:** 'horario: {{hora_atual}}'
 
-    9. **Dormir (Ação do Pet):** Quando o usuário pede para o XAND dormir/acordar.
-       - Exemplos de entrada: "Xand, vá dormir", "hora de dormir", "Xand acorde".
-       - Resposta: 'dormir'
+    6.  **Perguntar Temperatura de Curitiba:** Quando o usuário pergunta sobre a temperatura especificamente de Curitiba.
+        * **Entrada:** "qual a temperatura de Curitiba?", "está quente em Curitiba?", "me diga a temperatura atual em Curitiba".
+        * **Saída:** 'temperatura: {{temperatura_curitiba_celsius}}'
+
+    7.  **Brincar (Ação do Pet):** Quando o usuário pede para o XAND brincar.
+        * **Entrada:** "quero brincar", "Xand, vamos brincar?", "brinca comigo".
+        * **Saída:** 'brincar'
+
+    8.  **Comer (Ação do Pet):** Quando o usuário pede para o XAND comer.
+        * **Entrada:** "Xand, coma", "quero comer", "alimente o Xand".
+        * **Saída:** 'comer'
+
+    9.  **Dormir (Ação do Pet):** Quando o usuário pede para o XAND dormir/acordar.
+        * **Entrada:** "Xand, vá dormir", "hora de dormir", "Xand acorde".
+        * **Saída:** 'dormir'
 
     10. **Iniciar Minigame:** Quando o usuário pede para iniciar o minigame "Xand, o Voador".
-        - Exemplos de entrada: "vamos jogar", "iniciar minigame", "quero jogar Xand o Voador", "minigame".
-        - Resposta: 'jogar'
-    
+        * **Entrada:** "vamos jogar", "iniciar minigame", "quero jogar Xand o Voador", "minigame".
+        * **Saída:** 'jogar'
+
     11. **Configurar Timer:** Quando o usuário pede para configurar um cronômetro com uma duração específica.
-        - Exemplos de entrada: "iniciar timer de 1 minuto", "cronômetro 30 segundos", "timer para 5 minutos".
-        - Resposta: 'timer: {{duracao_em_segundos}}'
-        (Substitua {{duracao_em_segundos}} pela duração total em segundos. Ex: para "1 minuto e 30 segundos", retorne "90").
+        * **Entrada:** "iniciar timer de 1 minuto", "cronômetro 30 segundos", "timer para 5 minutos".
+        * **Saída:** 'timer: {{duracao_em_segundos}}'
+            (Substitua {{duracao_em_segundos}} pela duração total em segundos como um número inteiro. Ex: para "1 minuto e 30 segundos", retorne "90").
 
     12. **Configurar Alarme:** Quando o usuário pede para configurar um alarme para um horário específico.
-        - Exemplos de entrada: "definir alarme para 7 horas", "alarme 8 e meia da manhã", "me acorde às 14:00".
-        - Resposta: 'alarme: {{horario_alarme_HHMMSS}}'
-        (Substitua {{horario_alarme_HHMMSS}} pelo horário no formato HH:MM:SS (24h). Ex: para "8 e meia da manhã", retorne "08:30:00"; para "2 da tarde", retorne "14:00:00").
+        * **Entrada:** "definir alarme para 7 horas", "alarme 8 e meia da manhã", "me acorde às 14:00".
+        * **Saída:** 'alarme: {{horario_alarme_HHMMSS}}'
+            (Substitua {{horario_alarme_HHMMSS}} pelo horário no formato HH:MM:SS (24h). Ex: para "8 e meia da manhã", retorne "08:30:00"; para "2 da tarde", retorne "14:00:00").
 
     13. **Cancelar Alarme:** Quando o usuário pede para cancelar o alarme.
-        - Exemplos de entrada: "cancelar alarme", "desligar alarme".
-        - Resposta: 'acao: cancelar alarme'
+        * **Entrada:** "cancelar alarme", "desligar alarme".
+        * **Saída:** 'acao: cancelar alarme'
 
     14. **Perguntas Comuns/Interação Geral:** Quando o usuário faz uma pergunta que não se encaixa nas categorias acima, mas que esperaria uma resposta direta de um assistente virtual (ex: "faça essa conta", "quanto é 2 mais 2", "quem ganhou o jogo do Palmeiras ontem?", "qual a capital da França?").
-        - Resposta: 'TEXTO: {{resposta_geral_do_gemini}}'
-        (Neste caso, você deve gerar uma resposta concisa e direta para a pergunta do usuário. Deve ignorar as variáveis `{{}}` aqui e só usar o texto).
+        * **Saída:** 'TEXTO: [Resposta concisa e direta do Gemini à pergunta do usuário]'
+            (Para esta categoria, **não** retorne '{{resposta_geral_do_gemini}}'. Em vez disso, forneça a resposta diretamente dentro da string, por exemplo: 'TEXTO: 4' para "quanto é 2 mais 2").
 
     ---
-    Agora, interprete o texto do usuário: "##TEXTO_DO_USUARIO##" e forneça a resposta tabelada.
-    Se a intenção for "Perguntar Horário", substitua `{{hora_atual}}` pela string literal `{{hora_atual}}`.
-    Se a intenção for "Perguntar Temperatura de Curitiba", substitua `{{temperatura_curitiba_celsius}}` pela string literal `{{temperatura_curitiba_celsius}}`.
-    Se a intenção for "Repetir Fala (com frase)", substitua `{{frase_a_repetir}}` pela frase que o usuário pediu para repetir.
-    Se a intenção for "Configurar Timer", substitua `{{duracao_em_segundos}}` pela duração em segundos (número inteiro).
-    Se a intenção for "Configurar Alarme", substitua `{{horario_alarme_HHMMSS}}` pelo horário no formato HH:MM:SS (ex: "08:30:00" ou "14:00:00").
-    Se a intenção for "Perguntas Comuns/Interação Geral", substitua `{{resposta_geral_do_gemini}}` pela sua resposta concisa e direta à pergunta do usuário (não inclua o "TEXTO: " aqui, apenas a resposta). 
+
+    Agora, interprete o texto do usuário: "##TEXTO_DO_USUARIO##" e forneça a resposta formatada.
+
     Se nenhuma intenção clara for detectada nos pontos 1-14, responda com "NULL".
     """
 
@@ -367,6 +388,7 @@ def xand_ask():
         print(f"DEBUG_MATCH: Checking 'alarme:' -> {final_response_for_frontend.startswith('alarme: ')}")
         print(f"DEBUG_MATCH: Checking 'horario:' -> {final_response_for_frontend.startswith('horario: ')}")
         print(f"DEBUG_MATCH: Checking 'temperatura:' -> {final_response_for_frontend.startswith('temperatura: ')}")
+        print(f"DEBUG_MATCH: Checking 'tocar música:' -> {final_response_for_frontend.startswith('tocar música: ')}")
         print(f"DEBUG_MATCH: Checking 'acao:' (geral) -> {final_response_for_frontend.startswith('acao: ')}")
 
         # 1. Substituição de HORÁRIO 
@@ -413,6 +435,20 @@ def xand_ask():
                 final_response_for_frontend = f"TEXTO: {phrase_to_repeat}"
                 if not phrase_to_repeat: 
                     final_response_for_frontend = "TEXTO: Desculpe, qual frase devo repetir?"
+            pass
+
+        # 5. Tratamento de Tocar Música
+        elif final_response_for_frontend.startswith('tocar música: {{nome da música}}'):
+            if '{{nome da música}}' in final_response_for_frontend:
+                musica = transcribed_text
+                if musica.lower().startswith('tocar música'):
+                    musica = musica.lower().replace('tocar música', '', 1).strip()
+                elif musica.lower().startswith('ouvir música:'):
+                    musica = musica.lower().replace('ouvir música:', '', 1).strip()
+
+                track_id = procurar_musica(musica)
+
+                final_response_for_frontend = f"TEXTO: {track_id}" if track_id else " "
             pass
 
         elif final_response_for_frontend.startswith('TEXTO: '):
