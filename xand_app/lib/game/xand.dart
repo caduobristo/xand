@@ -18,6 +18,7 @@ import 'package:xand/components/status_bar.dart';
 import 'package:flutter_tts/flutter_tts.dart'; // TTS para fala
 import 'package:xand/components/reminder_note.dart';
 import 'dart:async';
+import 'package:url_launcher/url_launcher.dart';
 
 class Xand extends FlameGame {
   late Pet _pet;
@@ -344,6 +345,8 @@ class Xand extends FlameGame {
           await _speakAndWait('Oba! Vamos brincar!');
           play();
         } else if (comando == 'tocar musica') {
+          final parts = comando.split(':');
+          await _speakAndWait('Vou procurar a música para você!');
           if (parts.length == 2 && int.tryParse(parts[1].trim()) != null) { 
                 final track = int.parse(parts[1].trim());
                 await _speakAndWait('Vou procurar a música para você!');
@@ -524,24 +527,22 @@ class Xand extends FlameGame {
     }
   }
 
-  void playMusic(track) async {
-    final Uri spotifyUri = Uri.parse('spotify:track:$track'); 
+  Future<void>  playMusic(track) async {
+    final Uri spotifyUri = Uri.parse('spotify:track:$track');
+    var _message = "";
      if (!await launchUrl(spotifyUri, mode: LaunchMode.externalApplication)) {
       // try opening the web URL as a fallback.
       final Uri webUrl = Uri.parse('https://open.spotify.com/track/$track');
       if (!await launchUrl(webUrl, mode: LaunchMode.externalApplication)) {
-        setState(() {
           _message = 'Não foi possível abrir o Spotify. Verifique se o aplicativo está instalado.';
-        });
+          print(_message);
       } else {
-        setState(() {
           _message = 'Abrindo o Spotify no navegador (fallback)...';
-        });
+          print(_message);
       }
     } else {
-      setState(() {
         _message = 'Abrindo o Spotify...';
-      });
+        print(_message);
     }
   }
 
@@ -673,9 +674,8 @@ class Xand extends FlameGame {
       _meowTimer.timer.pause();
     }
 
-    if (children.contains(_pet)) {
-      remove(_pet);
-    }
+    remove(_pet);
+
     _pet = Pet(imageName: sprite, frameCount: frameCount, stepTime: stepTime)
       ..position = size / 2;
     add(_pet);

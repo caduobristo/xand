@@ -245,8 +245,7 @@ def xand_ask():
 
     1.  **Pedir Música:** Quando o usuário pede para tocar/cantar uma música específica.
         * **Entrada:** "toque a música {{nome da música}} para mim", "cante {{nome da música}}", "quero ouvir {{nome da música}}".
-        * **Saída:** 'tocar música {{nome da música}}'
-            (Substitua {{nome da música}} pela música que o usuário pediu)
+        * **Saída:** tocar música {{nome da música}}
 
     2.  **Tocar Piano:** Quando o usuário pede explicitamente para tocar o instrumento piano.
         * **Entrada:** "toque piano", "consegue tocar um piano?", "Xand, toque piano".
@@ -267,7 +266,7 @@ def xand_ask():
 
     6.  **Perguntar Temperatura de Curitiba:** Quando o usuário pergunta sobre a temperatura especificamente de Curitiba.
         * **Entrada:** "qual a temperatura de Curitiba?", "está quente em Curitiba?", "me diga a temperatura atual em Curitiba".
-        * **Saída:** 'temperatura: {{temperatura_curitiba_celsius}}'
+        * **Saída:** temperatura: {{temperatura_curitiba_celsius}}
 
     7.  **Brincar (Ação do Pet):** Quando o usuário pede para o XAND brincar.
         * **Entrada:** "quero brincar", "Xand, vamos brincar?", "brinca comigo".
@@ -389,7 +388,6 @@ def xand_ask():
         print(f"DEBUG_MATCH: Checking 'horario:' -> {final_response_for_frontend.startswith('horario: ')}")
         print(f"DEBUG_MATCH: Checking 'temperatura:' -> {final_response_for_frontend.startswith('temperatura: ')}")
         print(f"DEBUG_MATCH: Checking 'tocar música:' -> {final_response_for_frontend.startswith('tocar música: ')}")
-        print(f"DEBUG_MATCH: Checking 'acao:' (geral) -> {final_response_for_frontend.startswith('acao: ')}")
 
         # 1. Substituição de HORÁRIO 
         if final_response_for_frontend.startswith('horario: {{hora_atual}}'): 
@@ -438,7 +436,7 @@ def xand_ask():
             pass
 
         # 5. Tratamento de Tocar Música
-        elif final_response_for_frontend.startswith('tocar música: {{nome da música}}'):
+        elif final_response_for_frontend.startswith('tocar música {{nome da música}}'):
             if '{{nome da música}}' in final_response_for_frontend:
                 musica = transcribed_text
                 if musica.lower().startswith('tocar música'):
@@ -448,7 +446,7 @@ def xand_ask():
 
                 track_id = procurar_musica(musica)
 
-                final_response_for_frontend = f"TEXTO: {track_id}" if track_id else " "
+                final_response_for_frontend = f"c musica: {track_id}" if track_id else " "
             pass
 
         elif final_response_for_frontend.startswith('TEXTO: '):
