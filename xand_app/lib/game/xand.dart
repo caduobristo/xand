@@ -50,6 +50,8 @@ class Xand extends FlameGame {
   final AudioPlayer _audioPlayer = AudioPlayer();
   SpriteAnimationComponent? cover;
   AudioPlayer? _ambientPlayer;
+  final AudioPlayer _sfxPlayer = AudioPlayer();
+  bool _isSfxPlaying = false;
 
   // Cronômetro
   final ValueNotifier<int> stopwatchSecondsNotifier = ValueNotifier(0);
@@ -85,6 +87,10 @@ class Xand extends FlameGame {
     _setupStatusBars();
     _setupTimers();
     _setupUI();
+
+    _sfxPlayer.onPlayerStateChanged.listen((state) {
+      _isSfxPlaying = state == PlayerState.playing;
+    });
 
     await _loadSavedReminder();
 
@@ -133,10 +139,9 @@ class Xand extends FlameGame {
       period: 10.0,
       repeat: true,
       onTick: () {
-        if (!isNight && !_playingGuitar && !_ambient &&
-            !_alarm && !isStopwatchRunning && !_speaking &&
-            _currentAnimation == _defaultSprite) {
-          AudioPlayer().play(AssetSource('audios/meow.mp3'));
+        // A verificação agora é uma única chamada de função!
+        if (!_isActionRunning()) {
+          _playSfx('meow.mp3');
         }
       },
     );
@@ -314,7 +319,7 @@ class Xand extends FlameGame {
 
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://192.168.15.6:5000/xand/ask'),
+        Uri.parse('http://192.168.15.9:5000/xand/ask'),
       );
       request.files.add(await http.MultipartFile.fromPath(
         'audio',
@@ -333,158 +338,190 @@ class Xand extends FlameGame {
         final data = json.decode(responseBody);
         final fala = data['text'];
 
-        final String comando = fala.toString().replaceAll("'", "").replaceAll("`", "").replaceAll("´", "").trim().toLowerCase();
-        
-        if (comando == 'dormir') {
-          await _speakAndWait('Hmm, que soninho, vou nanar!');
-          sleep();
-        } else if (comando == 'acordar'){
-          await _speakAndWait('Bora pra mais uma!');
-          sleep();
-        } else if (comando == 'brincar') {
-          await _speakAndWait('Oba! Vamos brincar!');
-          play();
-        } else if (comando == 'tocar musica') {
-          final parts = comando.split(':');
-          await _speakAndWait('Vou procurar a música para você!');
-          if (parts.length == 2 && int.tryParse(parts[1].trim()) != null) { 
-                final track = int.parse(parts[1].trim());
-                await _speakAndWait('Vou procurar a música para você!');
-                playMusic(track);
-            } else {
-                await _speakAndWait('Desculpe, não entendi a música que você pediu.');
-            }
-        } else if (comando == 'tocar guitarra') {
-          await _speakAndWait('Pega esse solo de guitarra!');
-          playGuitar();
-        } else if (comando == 'tocar piano') {
-          await _speakAndWait('Certo! Uma melodia no piano para dar uma relaxada.');
-          // playPiano(); 
-        } else if (comando == 'comer') {
-          await _speakAndWait('Hmm, que delícia! Vou comer!');
-          eat();
-        } else if (comando == 'jogar'){
-          await _speakAndWait('Preparar, apontar, Xand, o Voador!');
-          onPlayMinigame();
-        } else if (comando.startsWith('lembrete:')){
-          saveReminder('lembrete aqui');
-        } else if (comando == 'ler lembrete'){
-          readReminderAloud();
-        }
-        // --- Lógica para TIMER e ALARME por voz ---
-        else if (comando.startsWith('timer:')) { 
-            final parts = comando.split(':'); 
-            if (parts.length == 2 && int.tryParse(parts[1].trim()) != null) { 
-                final seconds = int.parse(parts[1].trim());
-                await _speakAndWait('Certo! Iniciando seu cronômetro para $seconds segundos.');
-                startTimer(Duration(seconds: seconds));
-            } else {
-                await _speakAndWait('Desculpe, não entendi a duração do cronômetro.');
-            }
-        } else if (comando.startsWith('alarme:')) { 
-            final parts = comando.split(':'); 
-            if (parts.length >= 3 && parts[0].trim() == 'alarme') { 
-                final hourStr = parts[1].trim();
-                final minuteStr = parts[2].trim();
-                final secondStr = parts.length == 4 ? parts[3].trim() : '00'; 
+        if (data.containsKey('audio_data') && data['audio_data'] != null) {
+          final textToSpeak = data['text'] ?? 'Tocando música.';
+          await _speakAndWait(textToSpeak);
+          
+          final audioBytes = base64Decode(data['audio_data']);
+          final tempDir = await getTemporaryDirectory();
+          final tempFile = File('${tempDir.path}/temp_music.webm');
+          await tempFile.writeAsBytes(audioBytes);
 
-                try {
-                  final now = DateTime.now();
-                  final hour = int.parse(hourStr);
-                  final minute = int.parse(minuteStr);
-                  final second = int.parse(secondStr);
+          await _audioPlayer.play(DeviceFileSource(tempFile.path));
 
-                  DateTime alarmTime = DateTime(now.year, now.month, now.day, hour, minute, second);
-                  
-                  if (alarmTime.isBefore(now)) {
-                      alarmTime = alarmTime.add(const Duration(days: 1));
-                  }
-                  
-                  await _speakAndWait('Alarme configurado para ${hourStr} horas, ${minuteStr} minutos e ${secondStr} segundos.');
-                  setAlarm(alarmTime);
-                } catch (e) {
-                  await _speakAndWait('Desculpe, não consegui configurar o alarme com o horário fornecido.');
-                  print('Erro de parsing de alarme: $e');
+        } else if (data.containsKey('command') && data['command'] == 'stop_music') {
+          await _audioPlayer.stop();
+          await _speakAndWait('Música parada.');
+        } else {
+          final String comando = fala.toString().replaceAll("'", "").replaceAll(
+              "`", "").replaceAll("´", "").trim().toLowerCase();
+
+          if (comando == 'dormir') {
+            await _speakAndWait('Hmm, que soninho, vou nanar!');
+            sleep();
+          } else if (comando == 'acordar') {
+            await _speakAndWait('Bora pra mais uma!');
+            sleep();
+          } else if (comando == 'brincar') {
+            await _speakAndWait('Oba! Vamos brincar!');
+            play();
+          } else if (comando == 'tocar musica') {
+            final parts = comando.split(':');
+            await _speakAndWait('Vou procurar a música para você!');
+            if (parts.length == 2 && int.tryParse(parts[1].trim()) != null) {
+              final track = int.parse(parts[1].trim());
+              await _speakAndWait('Vou procurar a música para você!');
+              playMusic(track);
+            } else {
+              await _speakAndWait(
+                  'Desculpe, não entendi a música que você pediu.');
+            }
+          } else if (comando == 'tocar guitarra') {
+            await _speakAndWait('Pega esse solo de guitarra!');
+            playGuitar();
+          } else if (comando == 'tocar piano') {
+            await _speakAndWait(
+                'Certo! Uma melodia no piano para dar uma relaxada.');
+            // playPiano();
+          } else if (comando == 'comer') {
+            await _speakAndWait('Hmm, que delícia! Vou comer!');
+            eat();
+          } else if (comando == 'jogar') {
+            await _speakAndWait('Preparar, apontar, Xand, o Voador!');
+            onPlayMinigame();
+          } else if (comando.startsWith('lembrete:')) {
+            saveReminder('lembrete aqui');
+          } else if (comando == 'ler lembrete') {
+            readReminderAloud();
+          }
+          // --- Lógica para TIMER e ALARME por voz ---
+          else if (comando.startsWith('timer:')) {
+            final parts = comando.split(':');
+            if (parts.length == 2 && int.tryParse(parts[1].trim()) != null) {
+              final seconds = int.parse(parts[1].trim());
+              await _speakAndWait(
+                  'Certo! Iniciando seu cronômetro para $seconds segundos.');
+              startTimer(Duration(seconds: seconds));
+            } else {
+              await _speakAndWait(
+                  'Desculpe, não entendi a duração do cronômetro.');
+            }
+          } else if (comando.startsWith('alarme:')) {
+            final parts = comando.split(':');
+            if (parts.length >= 3 && parts[0].trim() == 'alarme') {
+              final hourStr = parts[1].trim();
+              final minuteStr = parts[2].trim();
+              final secondStr = parts.length == 4 ? parts[3].trim() : '00';
+
+              try {
+                final now = DateTime.now();
+                final hour = int.parse(hourStr);
+                final minute = int.parse(minuteStr);
+                final second = int.parse(secondStr);
+
+                DateTime alarmTime = DateTime(
+                    now.year, now.month, now.day, hour, minute, second);
+
+                if (alarmTime.isBefore(now)) {
+                  alarmTime = alarmTime.add(const Duration(days: 1));
                 }
+
+                await _speakAndWait(
+                    'Alarme configurado para ${hourStr} horas, ${minuteStr} minutos e ${secondStr} segundos.');
+                setAlarm(alarmTime);
+              } catch (e) {
+                await _speakAndWait(
+                    'Desculpe, não consegui configurar o alarme com o horário fornecido.');
+                print('Erro de parsing de alarme: $e');
+              }
             } else {
-                await _speakAndWait('Desculpe, não entendi o formato do alarme. Por favor, diga "alarme para 07:30:00" por exemplo.');
+              await _speakAndWait(
+                  'Desculpe, não entendi o formato do alarme. Por favor, diga "alarme para 07:30:00" por exemplo.');
             }
-        } else if (comando == 'cancelar alarme') {
-          await _speakAndWait('Alarme cancelado!');
-          cancelAlarm();
-        }
-    
-        else if (fala.startsWith('horario:') || 
-                   fala.startsWith('temperatura:') || 
-                   fala.startsWith('Sim!, estou te ouvindo, diga o que quer que eu fale!') || 
-                   fala.startsWith('TEXTO:')) { 
+          } else if (comando == 'cancelar alarme') {
+            await _speakAndWait('Alarme cancelado!');
+            cancelAlarm();
+          } else if (fala.startsWith('horario:') ||
+              fala.startsWith('temperatura:') ||
+              fala.startsWith(
+                  'Sim!, estou te ouvindo, diga o que quer que eu fale!') ||
+              fala.startsWith('TEXTO:')) {
             String textToSpeak = fala;
             print('DEBUG (FALA original): "${fala}"');
             if (textToSpeak.startsWith('TEXTO:')) {
-                textToSpeak = textToSpeak.substring(6).trim(); 
-                if (textToSpeak.isEmpty) { 
-                    textToSpeak = 'Desculpe, não entendi o que você disse.';
-                }
+              textToSpeak = textToSpeak.substring(6).trim();
+              if (textToSpeak.isEmpty) {
+                textToSpeak = 'Desculpe, não entendi o que você disse.';
+              }
             }
-            textToSpeak = textToSpeak.replaceAll("'", "").replaceAll("`", "").replaceAll("´", "");
+            textToSpeak =
+                textToSpeak.replaceAll("'", "").replaceAll("`", "").replaceAll(
+                    "´", "");
 
             _speak(textToSpeak); // Dispara a fala e continua imediatamente
             if (context.mounted) {
               showDialog(
                 context: context,
-                builder: (_) => AlertDialog(
-                  title: const Text('XAND Responde'),
-                  content: Text(fala), 
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('OK'),
+                builder: (_) =>
+                    AlertDialog(
+                      title: const Text('XAND Responde'),
+                      content: Text(fala),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('OK'),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
               );
             }
-        } 
-        
-        else if (fala == 'NULL') {
+          }
+
+          else if (fala == 'NULL') {
             await _speakAndWait('Desculpe, não entendi o que você disse.');
             if (context.mounted) {
               showDialog(
                 context: context,
-                builder: (_) => AlertDialog(
-                  title: const Text('XAND Responde'),
-                  content: const Text('Desculpe, não entendi o que você disse.'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('OK'),
+                builder: (_) =>
+                    AlertDialog(
+                      title: const Text('XAND Responde'),
+                      content: const Text(
+                          'Desculpe, não entendi o que você disse.'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('OK'),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
               );
             }
-        }
-        
-        else { 
-            String textToSpeak = fala.replaceAll("'", "").replaceAll("`", "").replaceAll("´", "");
-            _speak(textToSpeak); 
+          }
+
+          else {
+            String textToSpeak = fala
+                .replaceAll("'", "")
+                .replaceAll("`", "")
+                .replaceAll("´", "");
+            _speak(textToSpeak);
             if (context.mounted) {
               showDialog(
                 context: context,
-                builder: (_) => AlertDialog(
-                  title: const Text('XAND Responde'),
-                  content: Text(fala),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('OK'),
+                builder: (_) =>
+                    AlertDialog(
+                      title: const Text('XAND Responde'),
+                      content: Text(fala),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('OK'),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
               );
             }
+          }
         }
-
       } else {
         print('Erro ao enviar o arquivo de áudio para XAND. Status code: ${response.statusCode}');
         String errorBody = await response.stream.bytesToString();
@@ -576,10 +613,6 @@ class Xand extends FlameGame {
         overlays.add('MenuOverlay');
       });
     }
-  }
-
-  bool _isActionRunning() {
-    return _currentActionTimer != null || _playingGuitar || isNight || isRecording || _speaking;
   }
 
   void playPiano() async {
@@ -934,5 +967,26 @@ class Xand extends FlameGame {
     if (!overlays.isActive('MenuOverlay')) {
       overlays.add('MenuOverlay');
     }
+  }
+
+  void _playSfx(String fileName) {
+    if (_isSfxPlaying) return;
+    _sfxPlayer.play(AssetSource('audios/$fileName'));
+  }
+
+  bool _isActionRunning() {
+    return
+      _isPetting ||
+          _playingGuitar ||
+          _ambient ||
+          isNight ||
+          isRecording ||
+          _speaking ||
+          _alarm ||
+          isStopwatchRunning ||
+          _currentActionTimer != null ||
+          _audioPlayer.state == PlayerState.playing ||
+          _ambientPlayer?.state == PlayerState.playing ||
+          _isSfxPlaying;
   }
 }

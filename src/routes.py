@@ -1,6 +1,5 @@
 from flask import Blueprint, request, Response
 import json
-import subprocess
 import time
 import os
 import re 
@@ -11,16 +10,17 @@ from pydub import AudioSegment
 from dotenv import load_dotenv
 import google.generativeai as genai
 import requests
-import spotipy
-from spotipy.oauth2 import SpotifyClientCredentials
 import io
+import vlc
+import yt_dlp
+import unicodedata
+import base64
 
 load_dotenv()
 gemini_api_key = os.getenv("KEY_GEMINI")
 spotify_client_id = os.getenv("SPOTIFY_CLIENT_ID")
 spotify_client_secret = os.getenv("SPOTIFY_CLIENT_SECRET")
 openweathermap_api_key = os.getenv("OPENWEATHER_API_KEY")
-
 
 main = Blueprint('main', __name__)
 
@@ -52,64 +52,69 @@ def gemini_text():
         content_type='application/json; charset=utf-8'
     )
 
-
-@main.get('/spotify/music')
-def search_music():
-    data = request.get_json()
-    music = data.get('music') if data else None
-
-    if not music:
-        music = request.form.get('music')
-    if not music: 
-        return {'erro': 'Music não fornecido'}, 400
+def download_audio(query):
+    def normalizar(texto):
+        return unicodedata.normalize('NFKD', texto).encode('ASCII', 'ignore').decode().lower()
     
-    auth_manager = SpotifyClientCredentials(client_id=spotify_client_id, client_secret=spotify_client_secret) 
-    sp = spotipy.Spotify(auth_manager=auth_manager)
+    temp_path = 'temp_audio.webm'
 
-    try:
-        result = sp.search(q=music, type='track', limit=1)
+    # Exclui musica tocada anteriormente
+    if os.path.exists(temp_path):
+        os.remove(temp_path)
 
-        if result['tracks']['items']:
-            track = result['tracks']['items'][0]
-            name = track['name']
-            artist = track['artists'][0]['name']
-            track_id = track['id']
-            duration_ms = track['duration_ms']
-            spotify_uri = f"spotify:track:{track_id}"
+    ydl_opts = {
+        'format': 'bestaudio[abr<=128]/bestaudio',
+        'outtmpl': 'temp_audio.%(ext)s',
+        'postprocessors': [],
+        'quiet': True,
+        'no_warnings': True,
+        'noplaylist': True,
+        'extract_flat': False,
+    }
 
-            print(f"Tocando: {name} - {artist}")
-            print(f"Duração: {duration_ms / 1000:.2f} s")
+    palavras_proibidas = ['live', 'ao vivo', 'entrevista', 'aula', 
+                          'podcast', 'reaction', 'documentario', 'cover',
+                          'tutorial']
+    duracao_maxima_segundos = 600  # 10 minutos
 
-            subprocess.Popen(['spotify', f'--uri={spotify_uri}'])
-
-            time.sleep(2 + duration_ms / 1000)
-
-        else:
-            print("Nenhuma música encontrada")
-    except Exception as e:
-        return Response(
-            json.dumps({'erro': f'Erro ao processar música: {str(e)}'}, 500, ensure_ascii=False),
-            content_type='application/json; charset=utf-8'
-        )
+    flat_opts = ydl_opts.copy()
+    flat_opts['extract_flat'] = True
     
-def procurar_musica(musica):
-    auth_manager = SpotifyClientCredentials(client_id=spotify_client_id, client_secret=spotify_client_secret) 
-    sp = spotipy.Spotify(auth_manager=auth_manager)
+    with yt_dlp.YoutubeDL(flat_opts) as ydl:
+        results = ydl.extract_info(f"ytsearch5:{query}", download=False)
+        entries = results.get('entries', [])
 
-    try:
-        result = sp.search(q=musica, type='track', limit=1)
+        for entry in entries:
+            titulo = normalizar(entry.get('title', ''))
+            if any(p in titulo for p in palavras_proibidas):
+                continue
 
-        if result['tracks']['items']:
-            track = result['tracks']['items'][0]
-            track_id = track['id']
-            return track_id
-        else:
-            print("Nenhuma música encontrada")
-    except Exception as e:
-        return Response(
-            json.dumps({'erro': f'Erro ao processar música: {str(e)}'}, 500, ensure_ascii=False),
-            content_type='application/json; charset=utf-8'
-        )
+            url = entry['url']
+            print(f"Selecionado após filtro leve: {titulo}")
+
+            # 2ª etapa: carregar os metadados completos só desse vídeo
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl_detalhado:
+                full_info = ydl_detalhado.extract_info(url, download=True)
+                if 'Music' not in full_info.get('categories', []):
+                    continue  # não é da categoria Música
+                if full_info.get('duration', 0) <= duracao_maxima_segundos:
+                    print(f"Música final: {full_info['title']}")
+                    return (ydl_detalhado.prepare_filename(full_info), full_info['title'])
+
+    print("Nenhuma música apropriada encontrada.")
+    return None
+
+player = None
+def play_audio(file_path):
+    global player
+    instance = vlc.Instance()
+    player = instance.media_player_new()
+    media = instance.media_new(file_path)
+
+    player.set_media(media)
+    player.play()
+    print("Reproduzindo áudio...")
+
 
 def get_curitiba_temperature(api_key):
     lat = -25.4284
@@ -161,6 +166,7 @@ def parse_duration_to_seconds(text):
     result = total_seconds if total_seconds > 0 else None
     print(f"DEBUG_PARSE: parse_duration_to_seconds - Resultado final: {result}")
     return result
+
 def parse_alarm_time_to_hhmmss(text):
     print(f"DEBUG_PARSE: parse_alarm_time_to_hhmmss - Texto de entrada: '{text}'")
     
@@ -245,11 +251,12 @@ def xand_ask():
 
     1.  **Pedir Música:** Quando o usuário pede para tocar/cantar uma música específica.
         * **Entrada:** "toque a música {{nome da música}} para mim", "cante {{nome da música}}", "quero ouvir {{nome da música}}".
-        * **Saída:** tocar música {{nome da música}}
+        * **Saída:** 'tocar música {{nome da música}}'
+            (Substitua {{nome da música}} pela música que o usuário pediu)
 
-    2.  **Tocar Piano:** Quando o usuário pede explicitamente para tocar o instrumento piano.
-        * **Entrada:** "toque piano", "consegue tocar um piano?", "Xand, toque piano".
-        * **Saída:** 'tocar piano'
+    2   **Parar Música:** Quando o usuário pedir para parar de tocar a música.
+        * **Entrada:** "Pare de tocar a música para mim", "Pare de cantar", "Não quero mais ouvir música", "Pare de tocar a música {{nome da música}}".
+        * **Saída:** 'parar música'
 
     3.  **Tocar Guitarra:** Quando o usuário pede explicitamente para tocar o instrumento guitarra.
         * **Entrada:** "toque guitarra", "consegue tocar uma guitarra?", "Xand, toque guitarra".
@@ -311,47 +318,50 @@ def xand_ask():
 
     audio_file = request.files.get('audio')
     if not audio_file:
-        return {'erro': 'Arquivo de áudio não fornecido'}, 400
+        # Requisição de texto para DEBUG de funções
+        transcribed_text = request.form.get('text', '').strip()
+        if not transcribed_text:
+            return {'erro': 'Nem áudio nem texto foram fornecidos.'}, 400
+    else:
+        audio_bytes = audio_file.read()
 
-    audio_bytes = audio_file.read()
-
-    transcribed_text = ""
-    recognizer = sr.Recognizer()
-
-    try:
-        audio_in_memory = io.BytesIO(audio_bytes)
-        audio = AudioSegment.from_file(audio_in_memory, format="ogg")
-
-        wav_in_memory = io.BytesIO()
-        audio.export(
-            wav_in_memory,
-            format="wav",
-            parameters=["-ar", "16000", "-ac", "1", "-sample_fmt", "s16"] # Força 16kHz, mono, 16-bit PCM
-        )
-        wav_in_memory.seek(0)
-
-        with sr.AudioFile(wav_in_memory) as source:
-            audio_data = recognizer.record(source)
-            transcribed_text = recognizer.recognize_google(audio_data, language="pt-BR")
-            print(f"DEBUG: Texto transcrito pelo Google Speech Recognition: {transcribed_text}")
-            
-    except sr.UnknownValueError:
         transcribed_text = ""
-        print("DEBUG: Google Speech Recognition não conseguiu entender o áudio")
-    except sr.RequestError as e:
-        print(f"DEBUG: Não foi possível solicitar resultados do Google Speech Recognition; {e}")
-        return Response(
-            json.dumps({'erro': f'Erro no serviço de transcrição (Google STT): {str(e)}'}, ensure_ascii=False),
-            content_type='application/json; charset=utf-8',
-            status=500
-        )
-    except Exception as e:
-        print(f"DEBUG: Erro geral na transcrição: {e}")
-        return Response(
-            json.dumps({'erro': f'Erro inesperado na transcrição do áudio: {str(e)}'}, ensure_ascii=False),
-            content_type='application/json; charset=utf-8',
-            status=500
-        )
+        recognizer = sr.Recognizer()
+
+        try:
+            audio_in_memory = io.BytesIO(audio_bytes)
+            audio = AudioSegment.from_file(audio_in_memory, format="ogg")
+
+            wav_in_memory = io.BytesIO()
+            audio.export(
+                wav_in_memory,
+                format="wav",
+                parameters=["-ar", "16000", "-ac", "1", "-sample_fmt", "s16"] # Força 16kHz, mono, 16-bit PCM
+            )
+            wav_in_memory.seek(0)
+
+            with sr.AudioFile(wav_in_memory) as source:
+                audio_data = recognizer.record(source)
+                transcribed_text = recognizer.recognize_google(audio_data, language="pt-BR")
+                print(f"DEBUG: Texto transcrito pelo Google Speech Recognition: {transcribed_text}")
+                
+        except sr.UnknownValueError:
+            transcribed_text = ""
+            print("DEBUG: Google Speech Recognition não conseguiu entender o áudio")
+        except sr.RequestError as e:
+            print(f"DEBUG: Não foi possível solicitar resultados do Google Speech Recognition; {e}")
+            return Response(
+                json.dumps({'erro': f'Erro no serviço de transcrição (Google STT): {str(e)}'}, ensure_ascii=False),
+                content_type='application/json; charset=utf-8',
+                status=500
+            )
+        except Exception as e:
+            print(f"DEBUG: Erro geral na transcrição: {e}")
+            return Response(
+                json.dumps({'erro': f'Erro inesperado na transcrição do áudio: {str(e)}'}, ensure_ascii=False),
+                content_type='application/json; charset=utf-8',
+                status=500
+            )
     
     if not transcribed_text.strip():
         resposta = {'text': "NULL"}
@@ -436,18 +446,63 @@ def xand_ask():
             pass
 
         # 5. Tratamento de Tocar Música
-        elif final_response_for_frontend.startswith('tocar música {{nome da música}}'):
-            if '{{nome da música}}' in final_response_for_frontend:
-                musica = transcribed_text
-                if musica.lower().startswith('tocar música'):
-                    musica = musica.lower().replace('tocar música', '', 1).strip()
-                elif musica.lower().startswith('ouvir música:'):
-                    musica = musica.lower().replace('ouvir música:', '', 1).strip()
+        elif final_response_for_frontend.startswith('tocar música') or final_response_for_frontend.startswith('ouvir música'):
+            musica = final_response_for_frontend.replace('tocar música', '').replace('ouvir música', '').strip()
 
-                track_id = procurar_musica(musica)
+            if not musica or musica == 'nome da música':
+                resposta = {'text': 'Não encontrei a música solicitada.'}
+            else:
+                audio_info = download_audio(musica)
 
-                final_response_for_frontend = f"c musica: {track_id}" if track_id else " "
-            pass
+                if audio_info:
+                    file_path, title = audio_info
+                    cleaned_title = title.split('(')[0].strip()
+
+                    with open(file_path, 'rb') as f:
+                        audio_bytes = f.read()
+
+                    audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+
+                    os.remove(file_path)
+
+                    resposta = {
+                        'text': f'Boa pedida! Tocando {cleaned_title}',
+                        'audio_data': audio_base64,
+                        'audio_format': 'webm'
+                    }
+                else:
+                    resposta = {'text': f'Desculpe, não consegui encontrar a música {musica}.'}
+
+            # Envia a resposta JSON completa para o app
+            return Response(
+                json.dumps(resposta, ensure_ascii=False),
+                content_type='application/json; charset=utf-8'
+            )
+        elif final_response_for_frontend.startswith('parar música'):
+            # A lógica de parar agora será controlada pelo app
+            resposta = {'command': 'stop_music'}
+            return Response(
+                json.dumps(resposta, ensure_ascii=False),
+                content_type='application/json; charset=utf-8'
+            )
+        
+        # LÓGICA PARA TOCAR A MÚSICA DIRETO NO RASP SE ACHARMOS MELHOR
+
+        # elif final_response_for_frontend.startswith('tocar música') or final_response_for_frontend.startswith('ouvir música'):
+        #     musica = final_response_for_frontend.replace('tocar música', '').replace('ouvir música', '')
+        #     if musica == None:
+        #         final_response_for_frontend = 'Não encontrei a música solicitada'
+        #     else:
+        #         music, title = download_audio(musica)
+        #         play_audio(music)
+        #         final_response_for_frontend = f'Boa pedida! Tocando {title}'
+        #     pass
+        # elif final_response_for_frontend.startswith('parar música'):
+        #     if player.is_playing():
+        #         print('Parando música')
+        #         player.stop()
+        #     else:
+        #         final_response_for_frontend = 'Nenhum música está tocando'
 
         elif final_response_for_frontend.startswith('TEXTO: '):
             pass 
