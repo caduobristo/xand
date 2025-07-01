@@ -328,7 +328,7 @@ class Xand extends FlameGame {
 
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://192.168.15.2:5000/xand/ask'),
+        Uri.parse('http://192.168.15.3:5000/xand/ask'),
       );
       request.files.add(await http.MultipartFile.fromPath(
         'audio',
@@ -395,9 +395,23 @@ class Xand extends FlameGame {
             await _speakAndWait('Preparar, apontar, Xand, o Voador!');
             onPlayMinigame();
           } else if (comando.startsWith('lembrete:')) {
-            saveReminder('lembrete aqui');
+            final parts = comando.split('lembrete:'); 
+            if (parts.length == 2) { 
+              final reminderText = parts[1].trim(); 
+              if (reminderText.isNotEmpty) {
+                await _speakAndWait('Lembrete salvo!');
+                saveReminder(reminderText); 
+              } else {
+                await _speakAndWait('Desculpe, não entendi o texto do lembrete.');
+              }
+            } else {
+              await _speakAndWait('Desculpe, não entendi como salvar o lembrete. Diga "lembrete: texto do seu lembrete".');
+            }
           } else if (comando == 'ler lembrete') {
             readReminderAloud();
+          } else if (comando == 'acao: fogueira') { 
+          await _speakAndWait('Fogueira acesa!');
+          showCampfire();
           }
           // --- Lógica para TIMER e ALARME por voz ---
           else if (comando.startsWith('timer:')) {
@@ -461,7 +475,7 @@ class Xand extends FlameGame {
             }
             textToSpeak =
                 textToSpeak.replaceAll("'", "").replaceAll("`", "").replaceAll(
-                    "´", "");
+                    "´", "").replaceAll("TEXTO:", "");
 
             _speak(textToSpeak); // Dispara a fala e continua imediatamente
             if (context.mounted) {

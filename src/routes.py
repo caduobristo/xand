@@ -305,10 +305,27 @@ def xand_ask():
         * **Entrada:** "cancelar alarme", "desligar alarme".
         * **Saída:** 'acao: cancelar alarme'
 
-    14. **Perguntas Comuns/Interação Geral:** Quando o usuário faz uma pergunta que não se encaixa nas categorias acima, mas que esperaria uma resposta direta de um assistente virtual (ex: "faça essa conta", "quanto é 2 mais 2", "quem ganhou o jogo do Palmeiras ontem?", "qual a capital da França?").
+    14. **Salvar Lembrete:** Quando o usuário pede para salvar um lembrete com um texto específico.
+        - Exemplos de entrada: "salvar lembrete: ir ao mercado", "lembrete: comprar pão", "defina o lembrete: ligar para mãe".
+        - Resposta: 'lembrete: {{texto_lembrete}}'
+        (Substitua {{texto_lembrete}} pelo texto exato do lembrete que o usuário forneceu).
+
+    15. **Ler Lembrete:** Quando o usuário pede para ler o lembrete salvo.
+        - Exemplos de entrada: "ler lembrete", "qual meu lembrete", "me diga o lembrete".
+        - Resposta: 'ler lembrete'
+
+    16. **Apagar Lembrete:** Quando o usuário pede para apagar o lembrete.
+        - Exemplos de entrada: "apagar lembrete", "remover lembrete", "deletar lembrete".
+        - Resposta: 'apagar lembrete'
+        
+    17. **Ativar Fogueira (Background):** Quando o usuário pede para ligar o background de fogueira.
+        - Exemplos de entrada: "ligar fogueira", "ativar fogueira", "mostrar fogueira", "Xand, acende a fogueira".
+        - Resposta: 'acao: fogueira'
+
+    18. **Perguntas Comuns/Interação Geral:** Quando o usuário faz uma pergunta que não se encaixa nas categorias acima, mas que esperaria uma resposta direta de um assistente virtual (ex: "faça essa conta", "quanto é 2 mais 2", "quem ganhou o jogo do Palmeiras ontem?", "qual a capital da França?").
         * **Saída:** 'TEXTO: [Resposta concisa e direta do Gemini à pergunta do usuário]'
             (Para esta categoria, **não** retorne '{{resposta_geral_do_gemini}}'. Em vez disso, forneça a resposta diretamente dentro da string, por exemplo: 'TEXTO: 4' para "quanto é 2 mais 2").
-
+    
     ---
 
     Agora, interprete o texto do usuário: "##TEXTO_DO_USUARIO##" e forneça a resposta formatada.
@@ -397,6 +414,9 @@ def xand_ask():
         print(f"DEBUG_MATCH: Checking 'alarme:' -> {final_response_for_frontend.startswith('alarme: ')}")
         print(f"DEBUG_MATCH: Checking 'horario:' -> {final_response_for_frontend.startswith('horario: ')}")
         print(f"DEBUG_MATCH: Checking 'temperatura:' -> {final_response_for_frontend.startswith('temperatura: ')}")
+        print(f"DEBUG_MATCH: Checking 'lembrete:' -> {final_response_for_frontend.startswith('lembrete: ')}")
+        print(f"DEBUG_MATCH: Checking 'ler lembrete' -> {final_response_for_frontend.startswith('ler lembrete')}")
+        print(f"DEBUG_MATCH: Checking 'apagar lembrete' -> {final_response_for_frontend.startswith('apagar lembrete')}")
         print(f"DEBUG_MATCH: Checking 'tocar música:' -> {final_response_for_frontend.startswith('tocar música: ')}")
 
         # 1. Substituição de HORÁRIO 
