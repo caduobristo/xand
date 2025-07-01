@@ -363,7 +363,7 @@ class Xand extends FlameGame {
           await _speakAndWait('Música parada.');
         } else {
           final String comando = fala.toString().replaceAll("'", "").replaceAll(
-              "`", "").replaceAll("´", "").trim().toLowerCase();
+              "`", "").replaceAll("´", "").replaceAll("TEXTO: ", "").replaceAll("TEXT: ", "").trim().toLowerCase();
 
           if (comando == 'dormir') {
             await _speakAndWait('Hmm, que soninho, vou nanar!');
@@ -475,7 +475,7 @@ class Xand extends FlameGame {
             }
             textToSpeak =
                 textToSpeak.replaceAll("'", "").replaceAll("`", "").replaceAll(
-                    "´", "").replaceAll("TEXTO:", "");
+                    "´", "").replaceAll("TEXTO: ", "").replaceAll("TEXT: ", "");
 
             _speak(textToSpeak); // Dispara a fala e continua imediatamente
             if (context.mounted) {
@@ -484,7 +484,7 @@ class Xand extends FlameGame {
                 builder: (_) =>
                     AlertDialog(
                       title: const Text('XAND Responde'),
-                      content: Text(fala),
+                      content: Text(fala.replaceAll("TEXTO: ", "").replaceAll("TEXT: ", "")),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(context),
@@ -521,7 +521,10 @@ class Xand extends FlameGame {
             String textToSpeak = fala
                 .replaceAll("'", "")
                 .replaceAll("`", "")
-                .replaceAll("´", "");
+                .replaceAll("´", "")
+                .replaceAll("TEXTO: ", "")
+                .replaceAll("TEXT: ", "");
+
             _speak(textToSpeak);
             if (context.mounted) {
               showDialog(
