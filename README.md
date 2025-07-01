@@ -32,6 +32,10 @@ Criar arquivo .env com as seguintes configurações:
 Em formato de texto para o Gemini:
 
 ```bash
+curl.exe -X POST http://192.168.15.2:5000/xand/ask -F "text= Qual a temperatura em Curitiba?"
+```
+
+```bash
 curl -X POST http://localhost:5000/gemini/text \ 
     -H "Content-Type: application/json" \
     -d '{"text": "Faça uma solicitação aqui"}'
@@ -54,3 +58,5 @@ PowerShell(ADM) - ffmpeg serve para manter o aúdio na memória:
 Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
 
 choco install ffmpeg
+
+Baixar o programa vlc (não somente a biblioteca) para tocar a música no servidor

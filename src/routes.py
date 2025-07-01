@@ -407,7 +407,10 @@ def xand_ask():
         # 2. Substituição de TEMPERATURA 
         elif final_response_for_frontend.startswith('temperatura: {{temperatura_curitiba_celsius}}'): 
             temp_curitiba = get_curitiba_temperature(openweathermap_api_key)
-            final_response_for_frontend = final_response_for_frontend.replace("{{temperatura_curitiba_celsius}}", temp_curitiba)
+            if temp_curitiba == 'N/A':
+                final_response_for_frontend = "Não Foi possível encontrar a temperatura em Curitiba"
+            else:
+                final_response_for_frontend = f"A temperatura atual em Curitiba é {temp_curitiba}°"
         
         # 3. Tratamento de AÇÕES (timer, alarme)
         elif final_response_for_frontend.startswith('timer: '): 

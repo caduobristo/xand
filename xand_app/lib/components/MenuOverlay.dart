@@ -20,7 +20,8 @@ class MenuOverlay extends StatelessWidget {
     );
   }
 
-  Widget _buildButtonRow(BuildContext context) { // Aceita BuildContext
+  Widget _buildButtonRow(BuildContext context) {
+    // Aceita BuildContext
     if (game.isNight) {
       return ElevatedButton(
         onPressed: game.sleep,
@@ -48,35 +49,6 @@ class MenuOverlay extends StatelessWidget {
           child: const Text('Fogueira'),
         ),
         const SizedBox(width: 8),
-        //ElevatedButton(
-        //  onPressed: () {
-        //    game.startTimer(const Duration(minutes: 1));
-        //  },
-        //  child: const Text('Timer'),
-        //),
-        //const SizedBox(width: 8),
-        //ElevatedButton(
-        //  onPressed: () {
-        //    final now = DateTime.now();
-        //    game.setAlarm(now.add(const Duration(seconds: 15)));
-        //  },
-        //  child: const Text('Alarme'),
-        //),
-        //const SizedBox(width: 8),
-        //ElevatedButton(
-        //  onPressed: () {
-        //    game.saveReminder('Cagar na caixa de areia');
-        //  },
-        //  child: const Text('Salvar lembrete'),
-        //),
-        //const SizedBox(width: 8),
-        //ElevatedButton(
-        //  onPressed: () {
-        //    game.readReminderAloud();
-        //  },
-        //  child: const Text('Ler lembrete'),
-        //),
-        //const SizedBox(width: 8),
       ],
     );
   }

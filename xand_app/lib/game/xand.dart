@@ -52,6 +52,7 @@ class Xand extends FlameGame {
   AudioPlayer? _ambientPlayer;
   final AudioPlayer _sfxPlayer = AudioPlayer();
   bool _isSfxPlaying = false;
+  AudioPlayer? _actionSoundPlayer;
 
   // Cronômetro
   final ValueNotifier<int> stopwatchSecondsNotifier = ValueNotifier(0);
@@ -234,6 +235,10 @@ class Xand extends FlameGame {
   void play() async {
     if (_isActionRunning()) return; // Previne ações sobrepostas
 
+    _actionSoundPlayer = AudioPlayer();
+    _actionSoundPlayer!.setReleaseMode(ReleaseMode.loop);
+    _actionSoundPlayer!.play(AssetSource('audios/playing.mp3'));
+
     stopPetting();
     overlays.remove('MenuOverlay');
     overlays.add('ActionCancelOverlay');
@@ -257,6 +262,10 @@ class Xand extends FlameGame {
 
   void eat() {
     if (_isActionRunning()) return;
+
+    _actionSoundPlayer = AudioPlayer();
+    _actionSoundPlayer!.setReleaseMode(ReleaseMode.loop);
+    _actionSoundPlayer!.play(AssetSource('audios/eating.mp3'));
 
     stopPetting();
     overlays.remove('MenuOverlay');
@@ -319,7 +328,7 @@ class Xand extends FlameGame {
 
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://192.168.15.9:5000/xand/ask'),
+        Uri.parse('http://192.168.15.2:5000/xand/ask'),
       );
       request.files.add(await http.MultipartFile.fromPath(
         'audio',
@@ -379,10 +388,6 @@ class Xand extends FlameGame {
           } else if (comando == 'tocar guitarra') {
             await _speakAndWait('Pega esse solo de guitarra!');
             playGuitar();
-          } else if (comando == 'tocar piano') {
-            await _speakAndWait(
-                'Certo! Uma melodia no piano para dar uma relaxada.');
-            // playPiano();
           } else if (comando == 'comer') {
             await _speakAndWait('Hmm, que delícia! Vou comer!');
             eat();
@@ -764,8 +769,8 @@ class Xand extends FlameGame {
     _switchCover(
       sprite: 'fogueira.png',
       stepTime: 0.1,
-      frameCount: 100,
-      frameSize: Vector2(1500, 849),
+      frameCount: 20,
+      frameSize: Vector2(1024, 579.6),
     );
 
     _ambientPlayer = AudioPlayer();
@@ -957,6 +962,10 @@ class Xand extends FlameGame {
       }
       _playingGuitar = false;
     }
+
+    _actionSoundPlayer?.stop();
+    _actionSoundPlayer?.dispose();
+    _actionSoundPlayer = null;
 
     _currentActionTimer?.removeFromParent();
     _currentActionTimer = null;

@@ -31,6 +31,11 @@ class FlyingXand extends SpriteComponent
     _velocity.y += _gravity;
     position.y += _velocity.y * dt;
 
+    if (position.y < 0) {
+      position.y = 0; // Trava a posição no topo da tela
+      _velocity.y = 0; // Zera a velocidade de subida para um "teto" mais sólido
+    }
+
     // Checa se o pássaro saiu da tela por baixo
     if (position.y > gameRef.size.y) {
       gameRef.gameOver();
